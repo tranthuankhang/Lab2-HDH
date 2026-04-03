@@ -311,7 +311,7 @@ class BootSectorTab(QWidget):
         self.source_input.setPlaceholderText("Enter a FAT32 USB drive letter such as E:")
         self.source_input.returnPressed.connect(self.load_boot_sector)
 
-        self.load_button = QPushButton("Read Boot Sector")
+        self.load_button = QPushButton("Read")
         self.load_button.setObjectName("primaryButton")
         self.load_button.clicked.connect(self.load_boot_sector)
 
@@ -614,7 +614,7 @@ class TextFilesTab(QWidget):
 
         self.catalog_empty_state = build_empty_state_card(
             "Awaiting Boot Sector Read",
-            "Go to the Boot Sector tab, enter the USB drive letter, and press Read Boot Sector. TXT files will appear here automatically.",
+            "Go to the Boot Sector tab, enter the USB drive letter, and press Read. TXT files will appear here automatically.",
         )
 
         layout.addWidget(note)
