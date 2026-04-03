@@ -1,30 +1,35 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 
-
-@dataclass(slots=True)
 class ProcessInfo:
-    process_id: str
-    arrival_time: int
-    cpu_burst_time: int
-    priority_queue_id: int | None = None
-    time_slice: int | None = None
+    def __init__(
+        self,
+        process_id: str,
+        arrival_time: int,
+        cpu_burst_time: int,
+        priority_queue_id: int | None = None,
+        time_slice: int | None = None,
+    ) -> None:
+        self.process_id = process_id
+        self.arrival_time = arrival_time
+        self.cpu_burst_time = cpu_burst_time
+        self.priority_queue_id = priority_queue_id
+        self.time_slice = time_slice
 
 
-@dataclass(slots=True)
 class ScheduledSlice:
-    process_id: str
-    start_time: int
-    end_time: int
+    def __init__(self, process_id: str, start_time: int, end_time: int) -> None:
+        self.process_id = process_id
+        self.start_time = start_time
+        self.end_time = end_time
 
 
-@dataclass(slots=True)
 class SchedulingResult:
-    algorithm_name: str
-    slices: list[ScheduledSlice] = field(default_factory=list)
-    turnaround_times: dict[str, int] = field(default_factory=dict)
-    waiting_times: dict[str, int] = field(default_factory=dict)
+    def __init__(self, algorithm_name: str) -> None:
+        self.algorithm_name = algorithm_name
+        self.slices = []
+        self.turnaround_times = {}
+        self.waiting_times = {}
 
 
 class SchedulerError(Exception):

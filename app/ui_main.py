@@ -6,20 +6,15 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication,
     QFormLayout,
-    QFrame,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLayout,
     QLineEdit,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QStatusBar,
     QTabWidget,
     QTableWidget,
@@ -28,683 +23,345 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.drive_reader import DriveReader
 from app.section1_boot_sector_reader import FAT32ReaderError, BootSectorInfo, BootSectorReader
 from app.section2_txt_scanner import TxtFileEntry, TxtFileScanner
 
 
 APP_STYLE = """
 QWidget {
-    background: #f5f1e8;
-    color: #22313d;
+    background-color: #faf7f0;
     font-family: "Segoe UI";
-    font-size: 10pt;
+    font-size: 11pt;
+    color: #4f3d30;
+}
+QLabel {
+    background: transparent;
 }
 QMainWindow {
-    background: #efe8dc;
-}
-QFrame#windowHeader {
-    background: qlineargradient(
-        x1: 0, y1: 0, x2: 1, y2: 1,
-        stop: 0 #fbf7ee,
-        stop: 0.55 #f0e7d8,
-        stop: 1 #eadfcf
-    );
-    border: 1px solid #cfbea0;
-    border-radius: 24px;
-}
-QLabel#windowHeaderEyebrow {
-    background: transparent;
-    color: #7a6544;
-    font-size: 8pt;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-}
-QLabel#windowHeaderTitle {
-    background: transparent;
-    color: #183b37;
-    font-family: "Georgia";
-    font-size: 16pt;
-    font-weight: 700;
-}
-QLabel#windowHeaderText {
-    background: transparent;
-    color: #50606d;
-    font-size: 9.2pt;
-}
-QTabWidget::pane {
-    border: 1px solid #d5c7ae;
-    border-radius: 18px;
-    background: #fcfaf4;
-    top: -1px;
-}
-QTabBar::tab {
-    background: #ddd0ba;
-    color: #4c5b66;
-    padding: 12px 22px;
-    margin-right: 8px;
-    border-top-left-radius: 12px;
-    border-top-right-radius: 12px;
-    min-width: 170px;
-    font-weight: 600;
-}
-QTabBar::tab:selected {
-    background: #fcfaf4;
-    color: #173d38;
-    font-weight: 700;
-}
-QTabBar::tab:hover:!selected {
-    background: #e6dac7;
-}
-QFrame#heroCard {
-    background: qlineargradient(
-        x1: 0, y1: 0, x2: 1, y2: 1,
-        stop: 0 #faf5ea,
-        stop: 1 #efe5d1
-    );
-    border: 1px solid #d1c09e;
-    border-radius: 20px;
-}
-QLabel#heroEyebrow {
-    background: transparent;
-    color: #7c6644;
-    font-size: 9pt;
-    font-weight: 700;
-}
-QLabel#heroTitle {
-    background: transparent;
-    color: #173d38;
-    font-family: "Georgia";
-    font-size: 19pt;
-    font-weight: 700;
-}
-QLabel#heroSubtitle {
-    background: transparent;
-    color: #52616d;
-    font-size: 10pt;
+    background-color: #f8f5ee;
 }
 QGroupBox {
-    background: #fffdf8;
-    border: 1px solid #d7c9b0;
-    border-radius: 16px;
-    margin-top: 14px;
-    color: #263540;
+    font-weight: bold;
+    border: 1px solid #ddd2c1;
+    border-radius: 6px;
+    margin-top: 10px;
+    background-color: #fffdf9;
 }
 QGroupBox::title {
-    subcontrol-origin: margin;
-    left: 16px;
-    padding: 0 8px;
-    font-family: "Georgia";
-    font-size: 11pt;
-    font-weight: 700;
+    left: 10px;
+    padding: 0 4px;
 }
-QLineEdit, QPlainTextEdit, QTableWidget {
-    background: #fffaf2;
-    border: 1px solid #d8ccb8;
-    border-radius: 12px;
-    padding: 8px;
-    selection-background-color: #d7c19d;
-    selection-color: #1d2c36;
+QLineEdit, QTableWidget {
+    border: 1px solid #dfd4c4;
+    background-color: #fffefa;
+    selection-background-color: #d7c4a8;
+    selection-color: #463428;
 }
-QLineEdit:focus, QPlainTextEdit:focus, QTableWidget:focus {
-    border: 1px solid #8e7550;
+QLineEdit:focus {
+    border: 1px solid #b29472;
 }
 QTableWidget {
-    gridline-color: #e7ddcf;
-    alternate-background-color: #f8f3ea;
-}
-QTableWidget::item {
-    padding: 4px;
-}
-QHeaderView::section {
-    background: #ebe0cf;
-    color: #31424f;
-    padding: 9px;
-    border: none;
-    border-bottom: 1px solid #d7c9b0;
-    font-weight: 700;
+    alternate-background-color: #fcf8f1;
+    gridline-color: #ece2d6;
 }
 QPushButton {
-    background: #e6d8c2;
-    border: 1px solid #ccb997;
-    border-radius: 11px;
-    padding: 9px 16px;
-    font-weight: 700;
-    color: #31424f;
+    padding: 6px 14px;
+    background-color: #efe5d6;
+    color: #5f4a39;
+    border: 1px solid #d8cab6;
+    border-radius: 4px;
 }
 QPushButton:hover {
-    background: #dfcfb6;
+    background-color: #e8dccb;
 }
-QPushButton:disabled {
+QPushButton:pressed {
+    background-color: #deceb8;
+}
+QLabel#noteLabel {
+    color: #8b725d;
+}
+QHeaderView::section {
+    background-color: #f3ebde;
+    color: #5f4a39;
+    border: 1px solid #e0d4c3;
+    padding: 6px;
+    font-weight: bold;
+}
+QTabWidget::pane {
+    border: 1px solid #ddd2c1;
+    background: #fffdf9;
+}
+QTabBar::tab {
     background: #efe6d8;
-    color: #8a8d92;
-    border-color: #ddd0bd;
+    color: #786250;
+    padding: 8px 16px;
+    margin-right: 3px;
+    border: 1px solid #ddd2c1;
+    border-bottom: none;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
 }
-QPushButton#primaryButton {
-    background: #234d45;
-    border-color: #1b3f39;
-    color: white;
+QTabBar::tab:selected {
+    background: #fffdf9;
+    color: #5f4a39;
+    font-weight: bold;
 }
-QPushButton#primaryButton:hover {
-    background: #1f443d;
-}
-QPushButton#primaryButton:disabled {
-    background: #8fa19b;
-    border-color: #8fa19b;
-    color: #f7f4ef;
-}
-QLabel#sectionNote {
-    color: #5b6974;
-    background: transparent;
-}
-QFrame#emptyStateCard {
-    background: #faf6ee;
-    border: 1px dashed #d3c5ae;
-    border-radius: 14px;
-}
-QLabel#emptyStateTitle {
-    background: transparent;
-    color: #2f3d49;
-    font-family: "Georgia";
-    font-size: 11pt;
-    font-weight: 700;
-}
-QLabel#emptyStateText {
-    background: transparent;
-    color: #5d6b76;
-}
-QSplitter::handle {
-    background: #ddd1bf;
-    border-radius: 3px;
-    margin: 4px;
-}
-QStatusBar {
-    background: #ece4d6;
-    color: #3f4f5b;
+QTabBar::tab:hover:!selected {
+    background: #f3eadf;
 }
 QScrollArea {
     border: none;
-    background: transparent;
+    background: #faf7f0;
 }
 QScrollArea > QWidget > QWidget {
-    background: transparent;
+    background: #faf7f0;
+}
+QStatusBar {
+    background: #f3ece0;
+    color: #786250;
 }
 """
 
 
-def make_value_label(initial_text: str = "-") -> QLabel:
-    label = QLabel(initial_text)
+def create_note(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setObjectName("noteLabel")
     label.setWordWrap(True)
-    label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-    label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
     return label
 
 
-def build_hero_card(eyebrow: str, title: str, description: str) -> QFrame:
-    card = QFrame()
-    card.setObjectName("heroCard")
-
-    layout = QVBoxLayout(card)
-    layout.setContentsMargins(22, 20, 22, 20)
-    layout.setSpacing(6)
-
-    eyebrow_label = QLabel(eyebrow.upper())
-    eyebrow_label.setObjectName("heroEyebrow")
-
-    title_label = QLabel(title)
-    title_label.setObjectName("heroTitle")
-
-    description_label = QLabel(description)
-    description_label.setObjectName("heroSubtitle")
-    description_label.setWordWrap(True)
-
-    layout.addWidget(eyebrow_label)
-    layout.addWidget(title_label)
-    layout.addWidget(description_label)
-    return card
+def create_value_label() -> QLabel:
+    label = QLabel("-")
+    label.setWordWrap(True)
+    label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+    return label
 
 
-def build_empty_state_card(title: str, description: str) -> QFrame:
-    card = QFrame()
-    card.setObjectName("emptyStateCard")
-
-    layout = QVBoxLayout(card)
-    layout.setContentsMargins(18, 16, 18, 16)
-    layout.setSpacing(6)
-
-    title_label = QLabel(title)
-    title_label.setObjectName("emptyStateTitle")
-
-    description_label = QLabel(description)
-    description_label.setObjectName("emptyStateText")
-    description_label.setWordWrap(True)
-
-    layout.addWidget(title_label)
-    layout.addWidget(description_label)
-    return card
+def create_table(headers: list[str]) -> QTableWidget:
+    table = QTableWidget(0, len(headers))
+    table.setHorizontalHeaderLabels(headers)
+    table.verticalHeader().setVisible(False)
+    table.setAlternatingRowColors(True)
+    table.setEditTriggers(QTableWidget.NoEditTriggers)
+    table.setSelectionBehavior(QTableWidget.SelectRows)
+    table.setSelectionMode(QTableWidget.SingleSelection)
+    return table
 
 
-def build_scroll_page(content: QWidget) -> QScrollArea:
-    container = QWidget()
-    container_layout = QVBoxLayout(container)
-    container_layout.setContentsMargins(0, 0, 0, 0)
-    container_layout.setSpacing(0)
-    container_layout.setSizeConstraint(QLayout.SetMinAndMaxSize)
-    container_layout.addWidget(content)
+def set_table_text(table: QTableWidget, row: int, column: int, text: str) -> None:
+    item = QTableWidgetItem(text)
+    item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+    table.setItem(row, column, item)
 
-    scroll_area = QScrollArea()
-    scroll_area.setWidgetResizable(True)
-    scroll_area.setFrameShape(QFrame.NoFrame)
-    scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-    scroll_area.setWidget(container)
-    return scroll_area
+
+def create_scroll_page(content: QWidget) -> QScrollArea:
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    scroll.setWidget(content)
+    return scroll
 
 
 class BootSectorTab(QWidget):
-    def __init__(self, status_callback, txt_scan_callback=None) -> None:
+    def __init__(self, status_callback, txt_scan_callback=None, drive_reader: DriveReader | None = None) -> None:
         super().__init__()
-        self._status_callback = status_callback
-        self._txt_scan_callback = txt_scan_callback
-        self.reader = BootSectorReader()
-        self.summary_labels: dict[str, QLabel] = {}
+        self.status_callback = status_callback
+        self.txt_scan_callback = txt_scan_callback
+        self.reader = BootSectorReader(drive_reader)
 
         self.source_input = QLineEdit()
         self.source_input.setPlaceholderText("Enter a FAT32 USB drive letter such as E:")
         self.source_input.returnPressed.connect(self.load_boot_sector)
 
-        self.load_button = QPushButton("Read")
-        self.load_button.setObjectName("primaryButton")
-        self.load_button.clicked.connect(self.load_boot_sector)
+        self.read_button = QPushButton("Read")
+        self.read_button.clicked.connect(self.load_boot_sector)
 
-        self.info_table = QTableWidget(0, 2)
-        self.info_table.setHorizontalHeaderLabels(["Field", "Value"])
-        self.info_table.verticalHeader().setVisible(False)
-        self.info_table.setAlternatingRowColors(True)
-        self.info_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.info_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.info_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.info_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.info_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.info_table.setMinimumHeight(260)
-        self.info_table.setWordWrap(True)
+        self.info_table = create_table(["Field", "Value"])
         self.info_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.info_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
 
-        self.validation_box = QPlainTextEdit()
-        self.validation_box.setReadOnly(True)
-        self.validation_box.setPlaceholderText("Validation notes and quick diagnostics will appear here.")
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setSpacing(12)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 22, 22, 22)
-        layout.setSpacing(16)
-        layout.setSizeConstraint(QLayout.SetMinAndMaxSize)
-        layout.addWidget(
-            build_hero_card(
-                "Section 1",
-                "Boot Sector Analysis",
-                "Review the first sector of a FAT32 USB drive and inspect the key structural fields in a clean academic layout.",
-            )
-        )
-        layout.addWidget(self._build_source_group())
-        layout.addWidget(self._build_content_grid(), stretch=1)
+        title = QLabel("Section 1 - Boot Sector")
+        title.setStyleSheet("font-size: 15pt; font-weight: bold;")
+        main_layout.addWidget(title)
+        main_layout.addWidget(create_note("Read the Boot Sector of a FAT32 USB drive and show the required fields."))
+        main_layout.addWidget(self._build_source_group())
+        main_layout.addWidget(self._build_table_group())
 
-    def _build_source_group(self) -> QWidget:
-        group = QGroupBox("Source Selection")
-
+    def _build_source_group(self) -> QGroupBox:
+        group = QGroupBox("Source")
         layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 18)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 16, 12, 12)
+        layout.setSpacing(10)
 
-        hint = QLabel(
-            "Enter a FAT32 USB drive letter such as E:. This source will also be used to load TXT files in the other tab."
+        layout.addWidget(
+            create_note("Enter a drive letter like E:. The same source will be used for the TXT tab.")
         )
-        hint.setObjectName("sectionNote")
-        hint.setWordWrap(True)
 
         row = QHBoxLayout()
-        row.setSpacing(10)
-        row.addWidget(self.source_input, stretch=1)
-        row.addWidget(self.load_button)
-
-        layout.addWidget(hint)
+        row.addWidget(self.source_input, 1)
+        row.addWidget(self.read_button)
         layout.addLayout(row)
         return group
 
-    def _build_content_grid(self) -> QWidget:
-        container = QWidget()
-        layout = QGridLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setHorizontalSpacing(16)
-        layout.setVerticalSpacing(16)
-
-        table_group = self._build_table_group()
-        validation_group = self._build_validation_group()
-        summary_group = self._build_summary_group()
-
-        summary_group.setMinimumWidth(350)
-        validation_group.setMinimumHeight(140)
-        self.validation_box.setMinimumHeight(72)
-
-        layout.addWidget(table_group, 0, 0)
-        layout.addWidget(validation_group, 1, 0)
-        layout.addWidget(summary_group, 0, 1, 2, 1)
-        layout.setColumnStretch(0, 5)
-        layout.setColumnStretch(1, 3)
-        layout.setRowStretch(0, 3)
-        layout.setRowStretch(1, 2)
-        return container
-
-    def _build_table_group(self) -> QWidget:
-        group = QGroupBox("Boot Sector Field Table")
-
+    def _build_table_group(self) -> QGroupBox:
+        group = QGroupBox("Boot Sector Information")
         layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 18)
-        layout.setSpacing(12)
-
-        note = QLabel(
-            "Each row corresponds to a core FAT32 field that can be checked against the assignment requirements."
-        )
-        note.setObjectName("sectionNote")
-        note.setWordWrap(True)
-
-        layout.addWidget(note)
-        layout.addWidget(self.info_table)
-        return group
-
-    def _build_summary_group(self) -> QWidget:
-        group = QGroupBox("At a Glance")
-
-        layout = QFormLayout(group)
-        layout.setContentsMargins(18, 22, 18, 18)
-        layout.setLabelAlignment(Qt.AlignLeft)
-        layout.setFormAlignment(Qt.AlignTop)
-        layout.setSpacing(12)
-
-        for key, label_text in (
-            ("source", "Source"),
-            ("source_type", "Source Type"),
-            ("filesystem", "File System"),
-            ("label", "Volume Label"),
-            ("signature", "Boot Signature"),
-        ):
-            value_label = make_value_label()
-            self.summary_labels[key] = value_label
-            layout.addRow(f"{label_text}:", value_label)
-
-        return group
-
-    def _build_validation_group(self) -> QWidget:
-        group = QGroupBox("Validation Notes")
-
-        layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 18)
+        layout.setContentsMargins(12, 16, 12, 12)
         layout.setSpacing(10)
-
-        note = QLabel(
-            "Warnings and quick observations are collected here so the Boot Sector can be reviewed without scanning the full table."
-        )
-        note.setObjectName("sectionNote")
-        note.setWordWrap(True)
-
-        layout.addWidget(note)
-        layout.addWidget(self.validation_box)
+        layout.addWidget(self.info_table)
         return group
 
     def load_boot_sector(self) -> None:
         source = self.source_input.text().strip()
         if not source:
-            QMessageBox.information(
-                self,
-                "Missing Input",
-                "Please enter a FAT32 USB drive letter such as E: before reading.",
-            )
+            QMessageBox.information(self, "Missing Input", "Please enter a FAT32 USB drive letter such as E:.")
             return
 
         try:
             info = self.reader.read_boot_sector(source)
         except FAT32ReaderError as exc:
-            self._status_callback("Boot Sector read failed.")
-            QMessageBox.critical(self, "Unable to Read the Boot Sector", str(exc))
+            self.status_callback("Boot Sector read failed.")
+            QMessageBox.critical(self, "Unable to Read Boot Sector", str(exc))
             return
 
-        self._populate_boot_sector(info)
-        self._status_callback(f"Boot Sector loaded successfully from {info.source_display}.")
-        if self._txt_scan_callback is not None:
-            self._txt_scan_callback(info.source_display)
+        self.show_boot_sector(info)
+        self.status_callback(f"Boot Sector loaded from {info.source_display}.")
 
-    def _populate_boot_sector(self, info: BootSectorInfo) -> None:
-        self.summary_labels["source"].setText(info.source_display)
-        self.summary_labels["source_type"].setText(info.source_type_label)
-        self.summary_labels["filesystem"].setText(info.filesystem_type or "(unknown)")
-        self.summary_labels["label"].setText(info.volume_label or "(empty)")
-        self.summary_labels["signature"].setText(info.boot_signature)
+        if self.txt_scan_callback is not None:
+            self.txt_scan_callback(info.source_display)
 
+    def show_boot_sector(self, info: BootSectorInfo) -> None:
         rows = info.table_rows()
         self.info_table.setRowCount(len(rows))
+
         for row_index, (field_name, value) in enumerate(rows):
-            field_item = QTableWidgetItem(field_name)
-            value_item = QTableWidgetItem(value)
-            field_item.setFlags(field_item.flags() ^ Qt.ItemIsEditable)
-            value_item.setFlags(value_item.flags() ^ Qt.ItemIsEditable)
-            self.info_table.setItem(row_index, 0, field_item)
-            self.info_table.setItem(row_index, 1, value_item)
-
-        self._resize_info_table_to_contents()
-
-        if info.validation_messages:
-            self.validation_box.setPlainText("\n".join(f"- {item}" for item in info.validation_messages))
-        else:
-            self.validation_box.setPlainText(
-                "No major warnings were detected. The Boot Sector appears structurally consistent for the selected source."
-            )
-
-    def _resize_info_table_to_contents(self) -> None:
-        # Let the outer page handle scrolling, so this table grows downward
-        # instead of showing its own vertical scrollbar.
-        self.info_table.resizeRowsToContents()
-
-        total_height = self.info_table.frameWidth() * 2
-        total_height += self.info_table.horizontalHeader().height()
-
-        for row_index in range(self.info_table.rowCount()):
-            total_height += self.info_table.rowHeight(row_index)
-
-        if self.info_table.horizontalScrollBar().isVisible():
-            total_height += self.info_table.horizontalScrollBar().height()
-
-        self.info_table.setFixedHeight(max(total_height + 4, 260))
+            set_table_text(self.info_table, row_index, 0, field_name)
+            set_table_text(self.info_table, row_index, 1, value)
 
 
 class TextFilesTab(QWidget):
-    def __init__(self, status_callback) -> None:
+    def __init__(self, status_callback, drive_reader: DriveReader | None = None) -> None:
         super().__init__()
-        self._status_callback = status_callback
-        self.reader = TxtFileScanner()
+        self.status_callback = status_callback
+        self.reader = TxtFileScanner(drive_reader)
         self.catalog_entries: list[TxtFileEntry] = []
-        self.detail_labels: dict[str, QLabel] = {}
         self.current_source: str | None = None
-        self.catalog_status_label = QLabel(
-            "Read the Boot Sector in the first tab to load TXT files here automatically."
-        )
-        self.catalog_status_label.setObjectName("sectionNote")
-        self.catalog_status_label.setWordWrap(True)
+        self.detail_labels: dict[str, QLabel] = {}
 
-        self.catalog_table = QTableWidget(0, 3)
-        self.catalog_table.setHorizontalHeaderLabels(["TXT File", "Directory", "Size"])
-        self.catalog_table.verticalHeader().setVisible(False)
-        self.catalog_table.setAlternatingRowColors(True)
-        self.catalog_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.catalog_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.catalog_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.status_label = create_note("Read the Boot Sector in the first tab to load TXT files automatically.")
+
+        self.catalog_table = create_table(["TXT File", "Directory", "Size"])
         self.catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.catalog_table.itemSelectionChanged.connect(self.show_selected_file_details)
 
-        self.process_table = QTableWidget(0, 5)
-        self.process_table.setHorizontalHeaderLabels(
-            ["Process", "Arrival Time", "CPU Burst", "Queue / Priority", "Time Slice"]
+        self.process_table = create_table(
+            [
+                "Process ID",
+                "Arrival Time",
+                "CPU Burst Time",
+                "Priority Queue ID",
+                "Time Slice",
+                "Scheduling Algorithm Name",
+            ]
         )
-        self.process_table.verticalHeader().setVisible(False)
-        self.process_table.setAlternatingRowColors(True)
-        self.process_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.process_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.process_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.process_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.process_table.horizontalHeader().setStretchLastSection(False)
         self.process_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.process_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.process_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.process_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.process_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.process_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.process_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
 
-        self.run_button = QPushButton("Run Selected TXT File")
-        self.run_button.setObjectName("primaryButton")
-        self.run_button.clicked.connect(self.show_run_placeholder)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setSpacing(12)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 22, 22, 22)
-        layout.setSpacing(16)
-        layout.setSizeConstraint(QLayout.SetMinAndMaxSize)
-        layout.addWidget(
-            build_hero_card(
-                "Sections 2 to 4",
-                "TXT Listing Workspace",
-                "Section 2 is active here: after Boot Sector is read in the first tab, the app automatically scans the FAT32 USB drive and lists every .txt file.",
-            )
+        title = QLabel("Sections 2, 3 and 4 - TXT Files")
+        title.setStyleSheet("font-size: 15pt; font-weight: bold;")
+        main_layout.addWidget(title)
+        main_layout.addWidget(
+            create_note("Section 2 is active. After reading Boot Sector, the app scans all .txt files on the USB.")
         )
-        layout.addWidget(self._build_content_grid(), stretch=1)
+        main_layout.addWidget(self._build_catalog_group())
 
-    def _build_content_grid(self) -> QWidget:
-        container = QWidget()
-        layout = QGridLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setHorizontalSpacing(16)
-        layout.setVerticalSpacing(16)
-
-        catalog_group = self._build_catalog_group()
+        lower_layout = QHBoxLayout()
+        lower_layout.setSpacing(12)
         detail_group = self._build_detail_group()
         process_group = self._build_process_group()
-        output_group = self._build_output_group()
+        process_group.setMinimumWidth(820)
+        lower_layout.addWidget(detail_group, 1)
+        lower_layout.addWidget(process_group, 3)
+        main_layout.addLayout(lower_layout)
 
-        catalog_group.setMinimumWidth(320)
-        detail_group.setMinimumHeight(240)
-        process_group.setMinimumHeight(210)
-        output_group.setMinimumHeight(180)
+        main_layout.addWidget(self._build_section4_group())
 
-        layout.addWidget(catalog_group, 0, 0, 2, 1)
-        layout.addWidget(detail_group, 0, 1)
-        layout.addWidget(process_group, 1, 1)
-        layout.addWidget(output_group, 2, 0, 1, 2)
-        layout.setColumnStretch(0, 2)
-        layout.setColumnStretch(1, 3)
-        layout.setRowStretch(0, 3)
-        layout.setRowStretch(1, 3)
-        layout.setRowStretch(2, 2)
-        return container
-
-    def _build_catalog_group(self) -> QWidget:
-        group = QGroupBox("TXT File Catalog")
-
+    def _build_catalog_group(self) -> QGroupBox:
+        group = QGroupBox("Section 2 - TXT File List")
         layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 18)
-        layout.setSpacing(12)
-
-        note = QLabel(
-            "Every .txt file discovered on the FAT32 USB drive will be listed here after Boot Sector is read in the first tab."
-        )
-        note.setObjectName("sectionNote")
-        note.setWordWrap(True)
-
-        self.catalog_empty_state = build_empty_state_card(
-            "Awaiting Boot Sector Read",
-            "Go to the Boot Sector tab, enter the USB drive letter, and press Read. TXT files will appear here automatically.",
-        )
-
-        layout.addWidget(note)
-        layout.addWidget(self.catalog_status_label)
-        layout.addWidget(self.catalog_table, stretch=1)
-        layout.addWidget(self.catalog_empty_state)
+        layout.setContentsMargins(12, 16, 12, 12)
+        layout.setSpacing(10)
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.catalog_table)
         return group
 
-    def _build_detail_group(self) -> QWidget:
-        group = QGroupBox("File Details")
-
+    def _build_detail_group(self) -> QGroupBox:
+        group = QGroupBox("Section 3 - Selected TXT File")
         layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 18)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 16, 12, 12)
+        layout.setSpacing(10)
 
-        note = QLabel(
-            "Section 3 is intentionally left for a separate implementation. This panel is kept ready, but the metadata logic is not connected here."
+        layout.addWidget(
+            create_note(
+                "This panel only keeps the required fields for Section 3. Date created and time created "
+                "will be filled when Section 3 is implemented."
+            )
         )
-        note.setObjectName("sectionNote")
-        note.setWordWrap(True)
 
         form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignLeft)
-        form.setFormAlignment(Qt.AlignTop)
-        form.setSpacing(12)
+        form.setSpacing(10)
 
         for key, label_text in (
-            ("file_name", "File Name"),
-            ("directory", "Directory"),
-            ("created_at", "Created At"),
-            ("modified_at", "Modified At"),
-            ("starting_cluster", "Starting Cluster"),
-            ("file_size", "File Size"),
+            ("name", "Name"),
+            ("date_created", "Date created"),
+            ("time_created", "Time created"),
+            ("total_size", "Total Size"),
         ):
-            value_label = make_value_label()
+            value_label = create_value_label()
             self.detail_labels[key] = value_label
             form.addRow(f"{label_text}:", value_label)
 
-        action_row = QHBoxLayout()
-        action_row.setSpacing(12)
-        action_row.addWidget(self.run_button, alignment=Qt.AlignLeft)
-
-        action_note = QLabel(
-            "This handoff to Sections 3 and 4 is intentionally reserved for the remaining work."
-        )
-        action_note.setObjectName("sectionNote")
-        action_note.setWordWrap(True)
-        action_row.addWidget(action_note, stretch=1)
-
-        layout.addWidget(note)
         layout.addLayout(form)
-        layout.addLayout(action_row)
         return group
 
-    def _build_process_group(self) -> QWidget:
-        group = QGroupBox("Parsed Process Table")
-
+    def _build_process_group(self) -> QGroupBox:
+        group = QGroupBox("Section 3 - Process Information Table")
         layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 18)
-        layout.setSpacing(12)
-
-        note = QLabel(
-            "This table is reserved for Section 3 and is intentionally not populated in this revision."
+        layout.setContentsMargins(12, 16, 12, 12)
+        layout.setSpacing(10)
+        layout.addWidget(
+            create_note(
+                "This table is reserved for process information parsed from the selected TXT file, "
+                "including the scheduling algorithm name for each process row."
+            )
         )
-        note.setObjectName("sectionNote")
-        note.setWordWrap(True)
-
-        layout.addWidget(note)
         layout.addWidget(self.process_table)
         return group
 
-    def _build_output_group(self) -> QWidget:
-        group = QGroupBox("Scheduling Output")
-
+    def _build_section4_group(self) -> QGroupBox:
+        group = QGroupBox("Section 4 - Scheduling")
         layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 18)
-        layout.setSpacing(12)
-
-        note = QLabel(
-            "Section 4 remains reserved here and is intentionally not implemented in this revision."
-        )
-        note.setObjectName("sectionNote")
-        note.setWordWrap(True)
-
-        layout.addWidget(note)
+        layout.setContentsMargins(12, 16, 12, 12)
+        layout.setSpacing(10)
         layout.addWidget(
-            build_empty_state_card(
-                "Reserved for Scheduling Results",
-                "The Gantt chart, waiting time, turnaround time, and related scheduling summaries will appear here in a future implementation.",
-            )
+            create_note("Section 4 is still reserved. The scheduling algorithm output will be added later.")
         )
         return group
 
@@ -719,143 +376,122 @@ class TextFilesTab(QWidget):
         except FAT32ReaderError as exc:
             self.current_source = source
             self.catalog_entries = []
-            self.catalog_status_label.setText(
-                f"TXT scan for {source} failed. Please verify the USB drive and try reading Boot Sector again."
-            )
-            self.catalog_empty_state.setVisible(True)
             self.catalog_table.clearContents()
             self.catalog_table.setRowCount(0)
-            self._status_callback("TXT scan failed.")
+            self.clear_section3()
+            self.status_label.setText(f"TXT scan failed for {source}. Please read the Boot Sector again.")
+            self.status_callback("TXT scan failed.")
             QMessageBox.critical(self, "Unable to Scan TXT Files", str(exc))
             return
 
         self.current_source = source
         self.catalog_entries = txt_files
-        self._populate_catalog_table(txt_files)
-        self._clear_reserved_panels()
+        self.show_txt_files(txt_files)
+        self.clear_section3()
 
         file_count = len(txt_files)
         if file_count == 0:
-            self.catalog_status_label.setText(f"Automatic TXT scan completed for {source}. No .txt files were found.")
-        elif file_count == 1:
-            self.catalog_status_label.setText(f"Automatic TXT scan completed for {source}. Found 1 .txt file.")
-        else:
-            self.catalog_status_label.setText(
-                f"Automatic TXT scan completed for {source}. Found {file_count} .txt files."
-            )
+            self.status_label.setText(f"Finished scanning {source}. No .txt files were found.")
+            self.status_callback(f"No TXT files were found on {source.upper()}.")
+            return
 
-        if file_count == 0:
-            self._status_callback(f"No TXT files were found on {source.upper()}.")
-        elif file_count == 1:
-            self._status_callback(f"Found 1 TXT file on {source.upper()}.")
+        if file_count == 1:
+            self.status_label.setText(f"Finished scanning {source}. Found 1 .txt file.")
+            self.status_callback(f"Found 1 TXT file on {source.upper()}.")
         else:
-            self._status_callback(f"Found {file_count} TXT files on {source.upper()}.")
+            self.status_label.setText(f"Finished scanning {source}. Found {file_count} .txt files.")
+            self.status_callback(f"Found {file_count} TXT files on {source.upper()}.")
+
+        self.catalog_table.selectRow(0)
 
     def reset_waiting_state(self) -> None:
         self.current_source = None
         self.catalog_entries = []
-        self.catalog_status_label.setText(
-            "Read the Boot Sector in the first tab to load TXT files here automatically."
-        )
-        self.catalog_empty_state.setVisible(True)
         self.catalog_table.clearContents()
         self.catalog_table.setRowCount(0)
-        self._clear_reserved_panels()
+        self.clear_section3()
+        self.status_label.setText("Read the Boot Sector in the first tab to load TXT files automatically.")
 
     def sync_with_boot_sector_input(self, source_text: str) -> None:
         normalized_source = source_text.strip().upper()
         current_source = (self.current_source or "").strip().upper()
-        if normalized_source == current_source:
-            return
 
-        self.reset_waiting_state()
+        if normalized_source != current_source:
+            self.reset_waiting_state()
 
-    def _populate_catalog_table(self, txt_files: list[TxtFileEntry]) -> None:
+    def show_txt_files(self, txt_files: list[TxtFileEntry]) -> None:
         self.catalog_table.clearContents()
         self.catalog_table.setRowCount(len(txt_files))
 
         for row_index, txt_file in enumerate(txt_files):
-            for column_index, value in enumerate(
-                (txt_file.file_name, txt_file.directory_display, txt_file.size_display)
-            ):
-                item = QTableWidgetItem(value)
-                item.setFlags(item.flags() ^ Qt.ItemIsEditable)
-                self.catalog_table.setItem(row_index, column_index, item)
+            set_table_text(self.catalog_table, row_index, 0, txt_file.file_name)
+            set_table_text(self.catalog_table, row_index, 1, txt_file.get_directory_display())
+            set_table_text(self.catalog_table, row_index, 2, txt_file.get_size_display())
 
-        self.catalog_empty_state.setVisible(not txt_files)
+    def show_selected_file_details(self) -> None:
+        selected_rows = self.catalog_table.selectionModel().selectedRows()
+        if not selected_rows:
+            self.clear_section3()
+            return
 
-    def _clear_reserved_panels(self) -> None:
-        for value_label in self.detail_labels.values():
-            value_label.setText("-")
+        row = selected_rows[0].row()
+        if row < 0 or row >= len(self.catalog_entries):
+            self.clear_section3()
+            return
+
+        selected_file = self.catalog_entries[row]
+        self.detail_labels["name"].setText(selected_file.file_name)
+        self.detail_labels["date_created"].setText("Reserved for Section 3")
+        self.detail_labels["time_created"].setText("Reserved for Section 3")
+        self.detail_labels["total_size"].setText(selected_file.get_size_display())
+
         self.process_table.clearContents()
         self.process_table.setRowCount(0)
 
-    def show_run_placeholder(self) -> None:
-        message = (
-            "This button marks the future handoff from Section 3 to Section 4. "
-            "The scheduling execution logic has intentionally not been implemented in this UI revision."
-        )
-        self._status_callback("TXT run action is reserved for future integration.")
-        QMessageBox.information(self, "Scheduling Action Reserved", message)
+    def clear_section3(self) -> None:
+        for label in self.detail_labels.values():
+            label.setText("-")
+
+        self.process_table.clearContents()
+        self.process_table.setRowCount(0)
 
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Lab 02 | FAT32 Academic Explorer")
-        self.resize(1280, 820)
-        self.setMinimumSize(1100, 720)
+        self.setWindowTitle("FAT32 Explorer")
+        self.resize(1420, 860)
+        self.setMinimumSize(1320, 760)
 
-        self.text_files_tab = TextFilesTab(self.show_status_message)
-        self.boot_sector_tab = BootSectorTab(self.show_status_message, self.text_files_tab.load_txt_files_for_source)
+        self.drive_reader = DriveReader()
+        self.text_files_tab = TextFilesTab(self.show_status_message, self.drive_reader)
+        self.boot_sector_tab = BootSectorTab(
+            self.show_status_message,
+            self.text_files_tab.load_txt_files_for_source,
+            self.drive_reader,
+        )
 
         tabs = QTabWidget()
-        tabs.addTab(build_scroll_page(self.boot_sector_tab), "Boot Sector")
-        tabs.addTab(build_scroll_page(self.text_files_tab), "Text Files")
+        tabs.addTab(create_scroll_page(self.boot_sector_tab), "Boot Sector")
+        tabs.addTab(create_scroll_page(self.text_files_tab), "Text Files")
 
         container = QWidget()
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(16)
-        layout.addWidget(self._build_window_header())
-        layout.addWidget(tabs, stretch=1)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+
+        title = QLabel("FAT32 Explorer")
+        title.setStyleSheet("font-size: 17pt; font-weight: bold; color: #5c4331;")
+
+        layout.addWidget(title)
+        layout.addWidget(tabs)
         self.setCentralWidget(container)
 
         status_bar = QStatusBar()
-        status_bar.showMessage("Ready for Boot Sector review.")
+        status_bar.showMessage("Ready.")
         self.setStatusBar(status_bar)
+
         self.boot_sector_tab.source_input.textChanged.connect(self.text_files_tab.sync_with_boot_sector_input)
-
-    def _build_window_header(self) -> QWidget:
-        card = QFrame()
-        card.setObjectName("windowHeader")
-
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(22, 18, 22, 18)
-        layout.setSpacing(3)
-
-        eyebrow = QLabel("OPERATING SYSTEMS LABORATORY")
-        eyebrow.setObjectName("windowHeaderEyebrow")
-        eyebrow.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
-
-        title = QLabel("FAT32 Inspection and TXT Scheduling Workspace")
-        title.setObjectName("windowHeaderTitle")
-        title.setWordWrap(True)
-        title.setMaximumWidth(700)
-        title.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
-
-        description = QLabel(
-            "Boot Sector analysis and TXT file listing are available, while Sections 3 and 4 remain reserved for the remaining implementation."
-        )
-        description.setObjectName("windowHeaderText")
-        description.setWordWrap(True)
-        description.setMaximumWidth(760)
-        description.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
-
-        layout.addWidget(eyebrow)
-        layout.addWidget(title)
-        layout.addWidget(description)
-        return card
 
     def show_status_message(self, message: str) -> None:
         self.statusBar().showMessage(message, 5000)
@@ -866,7 +502,7 @@ def run() -> int:
     if app is None:
         app = QApplication(sys.argv)
 
-    app.setApplicationName("Lab 02 | FAT32 Academic Explorer")
+    app.setApplicationName("FAT32 Explorer")
     app.setStyleSheet(APP_STYLE)
 
     window = MainWindow()

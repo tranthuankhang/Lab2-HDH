@@ -7,6 +7,7 @@ Hiện tại đã làm xong:
 - Chức năng 1: đọc `Boot Sector` và hiển thị ra giao diện dưới dạng bảng
 - Chức năng 2: liệt kê tất cả file `*.txt` trên USB FAT32, kể cả trong thư mục con
 - Đã tách mã nguồn theo 4 phần của đề bài: Boot Sector, TXT scan, TXT info, scheduling
+- Đã tách phần đọc ổ đĩa dùng chung ra file riêng để tránh lặp việc mở/đọc USB giữa section 1 và 2
 - Khung sườn cho các chức năng còn lại: chi tiết file, mô phỏng scheduling
 
 ## Cấu trúc thư mục
@@ -15,6 +16,7 @@ Hiện tại đã làm xong:
 Lab2/
 |-- app/
 |   |-- __init__.py
+|   |-- drive_reader.py
 |   |-- section1_boot_sector_reader.py
 |   |-- section2_txt_scanner.py
 |   |-- section3_txt_info_reader.py
@@ -27,6 +29,7 @@ Lab2/
 
 Ghi chú:
 
+- `drive_reader.py`: phần đọc ổ đĩa dùng chung, giữ kết nối tới USB và cache dữ liệu đã đọc để section 1 và 2 dùng lại
 - `section1_boot_sector_reader.py`: phần 1 của đề, đọc và phân tích Boot Sector
 - `section2_txt_scanner.py`: phần 2 của đề, dò tất cả file `*.txt`
 - `section3_txt_info_reader.py`: khung sườn phần 3, chưa triển khai logic
@@ -55,7 +58,7 @@ python main.py
 ## Cách dùng chức năng Boot Sector
 
 - Nhập ký tự ổ đĩa FAT32, ví dụ: `E:`
-- Bấm `Đọc Boot Sector`
+- Bấm `Read`
 
 Lưu ý:
 
