@@ -5,7 +5,6 @@ import sys
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication,
-    QFileDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -21,7 +20,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
-    QSplitter,
     QStatusBar,
     QTabWidget,
     QTableWidget,
@@ -30,8 +28,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.fat32_reader import FAT32Reader, FAT32ReaderError
-from app.models import BootSectorInfo
+from app.section1_boot_sector_reader import FAT32ReaderError, BootSectorInfo, BootSectorReader
+from app.section2_txt_scanner import TxtFileEntry, TxtFileScanner
 
 
 APP_STYLE = """
@@ -302,18 +300,16 @@ def build_scroll_page(content: QWidget) -> QScrollArea:
 
 
 class BootSectorTab(QWidget):
-    def __init__(self, status_callback) -> None:
+    def __init__(self, status_callback, txt_scan_callback=None) -> None:
         super().__init__()
         self._status_callback = status_callback
-        self.reader = FAT32Reader()
+        self._txt_scan_callback = txt_scan_callback
+        self.reader = BootSectorReader()
         self.summary_labels: dict[str, QLabel] = {}
 
         self.source_input = QLineEdit()
-        self.source_input.setPlaceholderText("Enter E: or a path to a .img / .bin / .ima file")
+        self.source_input.setPlaceholderText("Enter a FAT32 USB drive letter such as E:")
         self.source_input.returnPressed.connect(self.load_boot_sector)
-
-        self.browse_button = QPushButton("Choose Image...")
-        self.browse_button.clicked.connect(self.pick_image_file)
 
         self.load_button = QPushButton("Read Boot Sector")
         self.load_button.setObjectName("primaryButton")
@@ -345,7 +341,7 @@ class BootSectorTab(QWidget):
             build_hero_card(
                 "Section 1",
                 "Boot Sector Analysis",
-                "Review the first sector of a FAT32 drive or disk image and inspect the key structural fields in a clean academic layout.",
+                "Review the first sector of a FAT32 USB drive and inspect the key structural fields in a clean academic layout.",
             )
         )
         layout.addWidget(self._build_source_group())
@@ -359,7 +355,7 @@ class BootSectorTab(QWidget):
         layout.setSpacing(12)
 
         hint = QLabel(
-            "Enter a FAT32 drive letter such as E: or select a disk image file. Direct USB access on Windows may require Administrator privileges."
+            "Enter a FAT32 USB drive letter such as E:. This source will also be used to load TXT files in the other tab."
         )
         hint.setObjectName("sectionNote")
         hint.setWordWrap(True)
@@ -367,7 +363,6 @@ class BootSectorTab(QWidget):
         row = QHBoxLayout()
         row.setSpacing(10)
         row.addWidget(self.source_input, stretch=1)
-        row.addWidget(self.browse_button)
         row.addWidget(self.load_button)
 
         layout.addWidget(hint)
@@ -454,24 +449,13 @@ class BootSectorTab(QWidget):
         layout.addWidget(self.validation_box)
         return group
 
-    def pick_image_file(self) -> None:
-        selected_file, _ = QFileDialog.getOpenFileName(
-            self,
-            "Choose a Disk Image or Binary Dump",
-            "",
-            "Disk images (*.img *.ima *.bin *.dd);;All files (*.*)",
-        )
-        if selected_file:
-            self.source_input.setText(selected_file)
-            self._status_callback("Disk image selected. Ready to read the Boot Sector.")
-
     def load_boot_sector(self) -> None:
         source = self.source_input.text().strip()
         if not source:
             QMessageBox.information(
                 self,
                 "Missing Input",
-                "Please enter a FAT32 drive letter such as E: or choose a disk image before reading.",
+                "Please enter a FAT32 USB drive letter such as E: before reading.",
             )
             return
 
@@ -484,6 +468,8 @@ class BootSectorTab(QWidget):
 
         self._populate_boot_sector(info)
         self._status_callback(f"Boot Sector loaded successfully from {info.source_display}.")
+        if self._txt_scan_callback is not None:
+            self._txt_scan_callback(info.source_display)
 
     def _populate_boot_sector(self, info: BootSectorInfo) -> None:
         self.summary_labels["source"].setText(info.source_display)
@@ -532,17 +518,15 @@ class TextFilesTab(QWidget):
     def __init__(self, status_callback) -> None:
         super().__init__()
         self._status_callback = status_callback
+        self.reader = TxtFileScanner()
+        self.catalog_entries: list[TxtFileEntry] = []
         self.detail_labels: dict[str, QLabel] = {}
-
-        self.source_input = QLineEdit()
-        self.source_input.setPlaceholderText("Enter E: or a path to a FAT32 disk image")
-
-        self.browse_button = QPushButton("Choose Image...")
-        self.browse_button.clicked.connect(self.pick_image_file)
-
-        self.scan_button = QPushButton("List TXT Files")
-        self.scan_button.setObjectName("primaryButton")
-        self.scan_button.clicked.connect(self.show_scan_placeholder)
+        self.current_source: str | None = None
+        self.catalog_status_label = QLabel(
+            "Read the Boot Sector in the first tab to load TXT files here automatically."
+        )
+        self.catalog_status_label.setObjectName("sectionNote")
+        self.catalog_status_label.setWordWrap(True)
 
         self.catalog_table = QTableWidget(0, 3)
         self.catalog_table.setHorizontalHeaderLabels(["TXT File", "Directory", "Size"])
@@ -581,35 +565,11 @@ class TextFilesTab(QWidget):
         layout.addWidget(
             build_hero_card(
                 "Sections 2 to 4",
-                "Text File Workflow",
-                "A single workspace for listing FAT32 text files, reviewing the selected file details, and preparing the future scheduling output area.",
+                "TXT Listing Workspace",
+                "Section 2 is active here: after Boot Sector is read in the first tab, the app automatically scans the FAT32 USB drive and lists every .txt file.",
             )
         )
-        layout.addWidget(self._build_source_group())
         layout.addWidget(self._build_content_grid(), stretch=1)
-
-    def _build_source_group(self) -> QWidget:
-        group = QGroupBox("TXT Discovery Source")
-
-        layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 18)
-        layout.setSpacing(12)
-
-        hint = QLabel(
-            "This source bar is reserved for the future FAT32 TXT scan. The UI is ready for drive or image input, while the scan logic will be connected later."
-        )
-        hint.setObjectName("sectionNote")
-        hint.setWordWrap(True)
-
-        row = QHBoxLayout()
-        row.setSpacing(10)
-        row.addWidget(self.source_input, stretch=1)
-        row.addWidget(self.browse_button)
-        row.addWidget(self.scan_button)
-
-        layout.addWidget(hint)
-        layout.addLayout(row)
-        return group
 
     def _build_content_grid(self) -> QWidget:
         container = QWidget()
@@ -647,19 +607,20 @@ class TextFilesTab(QWidget):
         layout.setSpacing(12)
 
         note = QLabel(
-            "When the FAT32 scan is implemented, every .txt file found in the selected source will be listed here. Clicking a row will open the full detail panel on the right."
+            "Every .txt file discovered on the FAT32 USB drive will be listed here after Boot Sector is read in the first tab."
         )
         note.setObjectName("sectionNote")
         note.setWordWrap(True)
 
-        layout.addWidget(note)
-        layout.addWidget(self.catalog_table, stretch=1)
-        layout.addWidget(
-            build_empty_state_card(
-                "Awaiting TXT Scan",
-                "The future directory traversal will populate this catalog with every eligible .txt file, including nested folders.",
-            )
+        self.catalog_empty_state = build_empty_state_card(
+            "Awaiting Boot Sector Read",
+            "Go to the Boot Sector tab, enter the USB drive letter, and press Read Boot Sector. TXT files will appear here automatically.",
         )
+
+        layout.addWidget(note)
+        layout.addWidget(self.catalog_status_label)
+        layout.addWidget(self.catalog_table, stretch=1)
+        layout.addWidget(self.catalog_empty_state)
         return group
 
     def _build_detail_group(self) -> QWidget:
@@ -670,7 +631,7 @@ class TextFilesTab(QWidget):
         layout.setSpacing(12)
 
         note = QLabel(
-            "Selecting a TXT file will reveal the full metadata from Section 3 here, followed by the action that launches the scheduling view."
+            "Section 3 is intentionally left for a separate implementation. This panel is kept ready, but the metadata logic is not connected here."
         )
         note.setObjectName("sectionNote")
         note.setWordWrap(True)
@@ -697,7 +658,7 @@ class TextFilesTab(QWidget):
         action_row.addWidget(self.run_button, alignment=Qt.AlignLeft)
 
         action_note = QLabel(
-            "The selected TXT file will be runnable from this button once the parser and scheduler integration are connected."
+            "This handoff to Sections 3 and 4 is intentionally reserved for the remaining work."
         )
         action_note.setObjectName("sectionNote")
         action_note.setWordWrap(True)
@@ -716,7 +677,7 @@ class TextFilesTab(QWidget):
         layout.setSpacing(12)
 
         note = QLabel(
-            "Once a TXT file is selected, its process definitions will appear here so the scheduling configuration can be reviewed before execution."
+            "This table is reserved for Section 3 and is intentionally not populated in this revision."
         )
         note.setObjectName("sectionNote")
         note.setWordWrap(True)
@@ -733,7 +694,7 @@ class TextFilesTab(QWidget):
         layout.setSpacing(12)
 
         note = QLabel(
-            "Section 4 will render inside this panel after the selected TXT file is executed from the detail view."
+            "Section 4 remains reserved here and is intentionally not implemented in this revision."
         )
         note.setObjectName("sectionNote")
         note.setWordWrap(True)
@@ -747,24 +708,87 @@ class TextFilesTab(QWidget):
         )
         return group
 
-    def pick_image_file(self) -> None:
-        selected_file, _ = QFileDialog.getOpenFileName(
-            self,
-            "Choose a Disk Image or Binary Dump",
-            "",
-            "Disk images (*.img *.ima *.bin *.dd);;All files (*.*)",
-        )
-        if selected_file:
-            self.source_input.setText(selected_file)
-            self._status_callback("TXT workflow source selected. Scan integration is ready to be connected later.")
+    def load_txt_files_for_source(self, source: str) -> None:
+        source = source.strip()
+        if not source:
+            self.reset_waiting_state()
+            return
 
-    def show_scan_placeholder(self) -> None:
-        message = (
-            "This button is intentionally UI-only in the current revision. "
-            "The FAT32 TXT scan logic will be connected later."
+        try:
+            txt_files = self.reader.list_txt_files(source)
+        except FAT32ReaderError as exc:
+            self.current_source = source
+            self.catalog_entries = []
+            self.catalog_status_label.setText(
+                f"TXT scan for {source} failed. Please verify the USB drive and try reading Boot Sector again."
+            )
+            self.catalog_empty_state.setVisible(True)
+            self.catalog_table.clearContents()
+            self.catalog_table.setRowCount(0)
+            self._status_callback("TXT scan failed.")
+            QMessageBox.critical(self, "Unable to Scan TXT Files", str(exc))
+            return
+
+        self.current_source = source
+        self.catalog_entries = txt_files
+        self._populate_catalog_table(txt_files)
+        self._clear_reserved_panels()
+
+        file_count = len(txt_files)
+        if file_count == 0:
+            self.catalog_status_label.setText(f"Automatic TXT scan completed for {source}. No .txt files were found.")
+        elif file_count == 1:
+            self.catalog_status_label.setText(f"Automatic TXT scan completed for {source}. Found 1 .txt file.")
+        else:
+            self.catalog_status_label.setText(
+                f"Automatic TXT scan completed for {source}. Found {file_count} .txt files."
+            )
+
+        if file_count == 0:
+            self._status_callback(f"No TXT files were found on {source.upper()}.")
+        elif file_count == 1:
+            self._status_callback(f"Found 1 TXT file on {source.upper()}.")
+        else:
+            self._status_callback(f"Found {file_count} TXT files on {source.upper()}.")
+
+    def reset_waiting_state(self) -> None:
+        self.current_source = None
+        self.catalog_entries = []
+        self.catalog_status_label.setText(
+            "Read the Boot Sector in the first tab to load TXT files here automatically."
         )
-        self._status_callback("TXT scan action is reserved for future integration.")
-        QMessageBox.information(self, "TXT Scan Reserved", message)
+        self.catalog_empty_state.setVisible(True)
+        self.catalog_table.clearContents()
+        self.catalog_table.setRowCount(0)
+        self._clear_reserved_panels()
+
+    def sync_with_boot_sector_input(self, source_text: str) -> None:
+        normalized_source = source_text.strip().upper()
+        current_source = (self.current_source or "").strip().upper()
+        if normalized_source == current_source:
+            return
+
+        self.reset_waiting_state()
+
+    def _populate_catalog_table(self, txt_files: list[TxtFileEntry]) -> None:
+        self.catalog_table.clearContents()
+        self.catalog_table.setRowCount(len(txt_files))
+
+        for row_index, txt_file in enumerate(txt_files):
+            for column_index, value in enumerate(
+                (txt_file.file_name, txt_file.directory_display, txt_file.size_display)
+            ):
+                item = QTableWidgetItem(value)
+                item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                self.catalog_table.setItem(row_index, column_index, item)
+
+        self.catalog_empty_state.setVisible(not txt_files)
+
+    def _clear_reserved_panels(self) -> None:
+        for value_label in self.detail_labels.values():
+            value_label.setText("-")
+        self.process_table.clearContents()
+        self.process_table.setRowCount(0)
 
     def show_run_placeholder(self) -> None:
         message = (
@@ -782,9 +806,12 @@ class MainWindow(QMainWindow):
         self.resize(1280, 820)
         self.setMinimumSize(1100, 720)
 
+        self.text_files_tab = TextFilesTab(self.show_status_message)
+        self.boot_sector_tab = BootSectorTab(self.show_status_message, self.text_files_tab.load_txt_files_for_source)
+
         tabs = QTabWidget()
-        tabs.addTab(build_scroll_page(BootSectorTab(self.show_status_message)), "Boot Sector")
-        tabs.addTab(build_scroll_page(TextFilesTab(self.show_status_message)), "Text Files")
+        tabs.addTab(build_scroll_page(self.boot_sector_tab), "Boot Sector")
+        tabs.addTab(build_scroll_page(self.text_files_tab), "Text Files")
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -797,6 +824,7 @@ class MainWindow(QMainWindow):
         status_bar = QStatusBar()
         status_bar.showMessage("Ready for Boot Sector review.")
         self.setStatusBar(status_bar)
+        self.boot_sector_tab.source_input.textChanged.connect(self.text_files_tab.sync_with_boot_sector_input)
 
     def _build_window_header(self) -> QWidget:
         card = QFrame()
@@ -817,7 +845,7 @@ class MainWindow(QMainWindow):
         title.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
 
         description = QLabel(
-            "Boot Sector analysis is available in the first tab, while the second tab prepares the future TXT scheduling workflow."
+            "Boot Sector analysis and TXT file listing are available, while Sections 3 and 4 remain reserved for the remaining implementation."
         )
         description.setObjectName("windowHeaderText")
         description.setWordWrap(True)
