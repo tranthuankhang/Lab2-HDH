@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import sys
 
 from PySide6.QtCore import Qt
@@ -24,8 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.drive_reader import DriveReader
-from app.section1_boot_sector_reader import FAT32ReaderError, BootSectorInfo, BootSectorReader
-from app.section2_txt_scanner import TxtFileEntry, TxtFileScanner
+from app.section1_boot_sector_reader import FAT32ReaderError, BootSectorReader
+from app.section2_txt_scanner import TxtFileScanner
 
 
 APP_STYLE = """
@@ -124,21 +122,24 @@ QStatusBar {
 """
 
 
-def create_note(text: str) -> QLabel:
+# tạo label ghi chú nhỏ
+def create_note(text):
     label = QLabel(text)
     label.setObjectName("noteLabel")
     label.setWordWrap(True)
     return label
 
 
-def create_value_label() -> QLabel:
+# tạo label hiển thị giá trị, cho phép bôi đen copy
+def create_value_label():
     label = QLabel("-")
     label.setWordWrap(True)
     label.setTextInteractionFlags(Qt.TextSelectableByMouse)
     return label
 
 
-def create_table(headers: list[str]) -> QTableWidget:
+# tạo bảng với các cột theo danh sách header
+def create_table(headers):
     table = QTableWidget(0, len(headers))
     table.setHorizontalHeaderLabels(headers)
     table.verticalHeader().setVisible(False)
@@ -149,13 +150,15 @@ def create_table(headers: list[str]) -> QTableWidget:
     return table
 
 
-def set_table_text(table: QTableWidget, row: int, column: int, text: str) -> None:
+# set text vào 1 ô trong bảng, không cho chỉnh sửa
+def set_table_text(table, row, col, text):
     item = QTableWidgetItem(text)
     item.setFlags(item.flags() ^ Qt.ItemIsEditable)
-    table.setItem(row, column, item)
+    table.setItem(row, col, item)
 
 
-def create_scroll_page(content: QWidget) -> QScrollArea:
+# bọc widget vào scroll area
+def create_scroll_page(content):
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)
     scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -164,19 +167,22 @@ def create_scroll_page(content: QWidget) -> QScrollArea:
 
 
 class BootSectorTab(QWidget):
-    def __init__(self, status_callback, txt_scan_callback=None, drive_reader: DriveReader | None = None) -> None:
+    def __init__(self, status_callback, txt_scan_callback=None, drive_reader=None):
         super().__init__()
         self.status_callback = status_callback
         self.txt_scan_callback = txt_scan_callback
         self.reader = BootSectorReader(drive_reader)
 
+        # ô nhập ổ đĩa
         self.source_input = QLineEdit()
         self.source_input.setPlaceholderText("Enter a FAT32 USB drive letter such as E:")
         self.source_input.returnPressed.connect(self.load_boot_sector)
 
+        # nút đọc boot sector
         self.read_button = QPushButton("Read")
         self.read_button.clicked.connect(self.load_boot_sector)
 
+        # bảng hiển thị thông tin boot sector
         self.info_table = create_table(["Field", "Value"])
         self.info_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.info_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
@@ -192,7 +198,7 @@ class BootSectorTab(QWidget):
         main_layout.addWidget(self._build_source_group())
         main_layout.addWidget(self._build_table_group())
 
-    def _build_source_group(self) -> QGroupBox:
+    def _build_source_group(self):
         group = QGroupBox("Source")
         layout = QVBoxLayout(group)
         layout.setContentsMargins(12, 16, 12, 12)
@@ -208,7 +214,7 @@ class BootSectorTab(QWidget):
         layout.addLayout(row)
         return group
 
-    def _build_table_group(self) -> QGroupBox:
+    def _build_table_group(self):
         group = QGroupBox("Boot Sector Information")
         layout = QVBoxLayout(group)
         layout.setContentsMargins(12, 16, 12, 12)
@@ -216,9 +222,9 @@ class BootSectorTab(QWidget):
         layout.addWidget(self.info_table)
         return group
 
-    def load_boot_sector(self) -> None:
+    def load_boot_sector(self):
         source = self.source_input.text().strip()
-        if not source:
+        if source == "":
             QMessageBox.information(self, "Missing Input", "Please enter a FAT32 USB drive letter such as E:.")
             return
 
@@ -235,32 +241,34 @@ class BootSectorTab(QWidget):
         if self.txt_scan_callback is not None:
             self.txt_scan_callback(info.source_display)
 
-    def show_boot_sector(self, info: BootSectorInfo) -> None:
+    def show_boot_sector(self, info):
         rows = info.table_rows()
         self.info_table.setRowCount(len(rows))
 
-        for row_index, (field_name, value) in enumerate(rows):
-            set_table_text(self.info_table, row_index, 0, field_name)
-            set_table_text(self.info_table, row_index, 1, value)
+        for i, (field_name, value) in enumerate(rows):
+            set_table_text(self.info_table, i, 0, field_name)
+            set_table_text(self.info_table, i, 1, value)
 
 
 class TextFilesTab(QWidget):
-    def __init__(self, status_callback, drive_reader: DriveReader | None = None) -> None:
+    def __init__(self, status_callback, drive_reader=None):
         super().__init__()
         self.status_callback = status_callback
         self.reader = TxtFileScanner(drive_reader)
-        self.catalog_entries: list[TxtFileEntry] = []
-        self.current_source: str | None = None
-        self.detail_labels: dict[str, QLabel] = {}
+        self.catalog_entries = []
+        self.current_source = None
+        self.detail_labels = {}
 
         self.status_label = create_note("Read the Boot Sector in the first tab to load TXT files automatically.")
 
+        # bảng danh sách file txt tìm được
         self.catalog_table = create_table(["TXT File", "Directory", "Size"])
         self.catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.catalog_table.itemSelectionChanged.connect(self.show_selected_file_details)
 
+        # bảng thông tin process đọc từ file txt
         self.process_table = create_table(
             [
                 "Process ID",
@@ -303,7 +311,7 @@ class TextFilesTab(QWidget):
 
         main_layout.addWidget(self._build_section4_group())
 
-    def _build_catalog_group(self) -> QGroupBox:
+    def _build_catalog_group(self):
         group = QGroupBox("Section 2 - TXT File List")
         layout = QVBoxLayout(group)
         layout.setContentsMargins(12, 16, 12, 12)
@@ -312,7 +320,7 @@ class TextFilesTab(QWidget):
         layout.addWidget(self.catalog_table)
         return group
 
-    def _build_detail_group(self) -> QGroupBox:
+    def _build_detail_group(self):
         group = QGroupBox("Section 3 - Selected TXT File")
         layout = QVBoxLayout(group)
         layout.setContentsMargins(12, 16, 12, 12)
@@ -328,20 +336,26 @@ class TextFilesTab(QWidget):
         form = QFormLayout()
         form.setSpacing(10)
 
-        for key, label_text in (
-            ("name", "Name"),
-            ("date_created", "Date created"),
-            ("time_created", "Time created"),
-            ("total_size", "Total Size"),
-        ):
-            value_label = create_value_label()
-            self.detail_labels[key] = value_label
-            form.addRow(f"{label_text}:", value_label)
+        name_label = create_value_label()
+        self.detail_labels["name"] = name_label
+        form.addRow("Name:", name_label)
+
+        date_label = create_value_label()
+        self.detail_labels["date_created"] = date_label
+        form.addRow("Date created:", date_label)
+
+        time_label = create_value_label()
+        self.detail_labels["time_created"] = time_label
+        form.addRow("Time created:", time_label)
+
+        size_label = create_value_label()
+        self.detail_labels["total_size"] = size_label
+        form.addRow("Total Size:", size_label)
 
         layout.addLayout(form)
         return group
 
-    def _build_process_group(self) -> QGroupBox:
+    def _build_process_group(self):
         group = QGroupBox("Section 3 - Process Information Table")
         layout = QVBoxLayout(group)
         layout.setContentsMargins(12, 16, 12, 12)
@@ -355,7 +369,7 @@ class TextFilesTab(QWidget):
         layout.addWidget(self.process_table)
         return group
 
-    def _build_section4_group(self) -> QGroupBox:
+    def _build_section4_group(self):
         group = QGroupBox("Section 4 - Scheduling")
         layout = QVBoxLayout(group)
         layout.setContentsMargins(12, 16, 12, 12)
@@ -365,9 +379,9 @@ class TextFilesTab(QWidget):
         )
         return group
 
-    def load_txt_files_for_source(self, source: str) -> None:
+    def load_txt_files_for_source(self, source):
         source = source.strip()
-        if not source:
+        if source == "":
             self.reset_waiting_state()
             return
 
@@ -404,7 +418,7 @@ class TextFilesTab(QWidget):
 
         self.catalog_table.selectRow(0)
 
-    def reset_waiting_state(self) -> None:
+    def reset_waiting_state(self):
         self.current_source = None
         self.catalog_entries = []
         self.catalog_table.clearContents()
@@ -412,25 +426,29 @@ class TextFilesTab(QWidget):
         self.clear_section3()
         self.status_label.setText("Read the Boot Sector in the first tab to load TXT files automatically.")
 
-    def sync_with_boot_sector_input(self, source_text: str) -> None:
+    def sync_with_boot_sector_input(self, source_text):
         normalized_source = source_text.strip().upper()
-        current_source = (self.current_source or "").strip().upper()
+
+        if self.current_source is not None:
+            current_source = self.current_source.strip().upper()
+        else:
+            current_source = ""
 
         if normalized_source != current_source:
             self.reset_waiting_state()
 
-    def show_txt_files(self, txt_files: list[TxtFileEntry]) -> None:
+    def show_txt_files(self, txt_files):
         self.catalog_table.clearContents()
         self.catalog_table.setRowCount(len(txt_files))
 
-        for row_index, txt_file in enumerate(txt_files):
-            set_table_text(self.catalog_table, row_index, 0, txt_file.file_name)
-            set_table_text(self.catalog_table, row_index, 1, txt_file.get_directory_display())
-            set_table_text(self.catalog_table, row_index, 2, txt_file.get_size_display())
+        for i, txt_file in enumerate(txt_files):
+            set_table_text(self.catalog_table, i, 0, txt_file.file_name)
+            set_table_text(self.catalog_table, i, 1, txt_file.get_directory_display())
+            set_table_text(self.catalog_table, i, 2, txt_file.get_size_display())
 
-    def show_selected_file_details(self) -> None:
+    def show_selected_file_details(self):
         selected_rows = self.catalog_table.selectionModel().selectedRows()
-        if not selected_rows:
+        if len(selected_rows) == 0:
             self.clear_section3()
             return
 
@@ -448,7 +466,7 @@ class TextFilesTab(QWidget):
         self.process_table.clearContents()
         self.process_table.setRowCount(0)
 
-    def clear_section3(self) -> None:
+    def clear_section3(self):
         for label in self.detail_labels.values():
             label.setText("-")
 
@@ -457,7 +475,7 @@ class TextFilesTab(QWidget):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__()
         self.setWindowTitle("FAT32 Explorer")
         self.resize(1420, 860)
@@ -493,11 +511,11 @@ class MainWindow(QMainWindow):
 
         self.boot_sector_tab.source_input.textChanged.connect(self.text_files_tab.sync_with_boot_sector_input)
 
-    def show_status_message(self, message: str) -> None:
+    def show_status_message(self, message):
         self.statusBar().showMessage(message, 5000)
 
 
-def run() -> int:
+def run():
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)
