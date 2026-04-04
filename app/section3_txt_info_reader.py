@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from app.section2_txt_scanner import TxtFileEntry, TxtFileScanner
 
 

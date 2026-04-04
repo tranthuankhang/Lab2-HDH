@@ -1,22 +1,20 @@
-from __future__ import annotations
-
-from app.drive_reader import DriveReader, FAT32Layout, FAT32ReaderError, format_bytes
+from app.drive_reader import DriveReader, FAT32ReaderError, format_bytes
 from app.section1_boot_sector_reader import BootSectorReader
 
 
 class TxtFileEntry:
-    def __init__(self, file_name: str, directory_path: str, file_size: int, starting_cluster: int) -> None:
+    def __init__(self, file_name, directory_path, file_size, starting_cluster):
         self.file_name = file_name
         self.directory_path = directory_path
         self.file_size = file_size
         self.starting_cluster = starting_cluster
 
-    def get_directory_display(self) -> str:
+    def get_directory_display(self):
         if self.directory_path:
             return self.directory_path
         return "/"
 
-    def get_size_display(self) -> str:
+    def get_size_display(self):
         return f"{self.file_size:,} bytes ({format_bytes(self.file_size)})"
 
 
@@ -29,170 +27,135 @@ class TxtFileScanner:
     ATTR_DIRECTORY = 0x10
     ATTR_VOLUME_ID = 0x08
 
-    def __init__(self, drive_reader: DriveReader | None = None) -> None:
+    def __init__(self, drive_reader=None):
         if drive_reader is None:
             drive_reader = DriveReader()
         self.drive_reader = drive_reader
         self.boot_sector_reader = BootSectorReader(drive_reader)
 
-    def list_txt_files(self, source: str) -> list[TxtFileEntry]:
-        boot_sector_info = self.drive_reader.get_boot_sector_info(source)
-        if boot_sector_info is None:
-            boot_sector_info = self.boot_sector_reader.read_boot_sector(source)
+    def list_txt_files(self, source):
+        boot_info = self.drive_reader.get_boot_sector_info(source)
+        if boot_info is None:
+            boot_info = self.boot_sector_reader.read_boot_sector(source)
 
-        layout = self.drive_reader.build_layout(source, boot_sector_info)
+        layout = self.drive_reader.build_layout(source, boot_info)
         fat_table = self.drive_reader.get_fat_table(source, layout)
+
         txt_files = []
-        visited_directories = set()
-        self._scan_directory(source, layout, fat_table, layout.root_cluster, [], visited_directories, txt_files)
-        txt_files.sort(key=lambda item: (item.directory_path.casefold(), item.file_name.casefold()))
+        visited_dirs = set()
+        self._scan_dir(source, layout, fat_table, layout.root_cluster, [], visited_dirs, txt_files)
+        txt_files.sort(key=lambda f: (f.directory_path.casefold(), f.file_name.casefold()))
         return txt_files
 
-    def _scan_directory(
-        self,
-        source: str,
-        layout: FAT32Layout,
-        fat_table: bytes,
-        directory_cluster: int,
-        parent_directories: list[str],
-        visited_directories: set[int],
-        txt_files: list[TxtFileEntry],
-    ) -> None:
-        if directory_cluster < 2:
+    def _scan_dir(self, source, layout, fat_table, dir_cluster, parent_dirs, visited_dirs, txt_files):
+        if dir_cluster < 2:
             return
-        if directory_cluster in visited_directories:
+        if dir_cluster in visited_dirs:
             return
+        visited_dirs.add(dir_cluster)
 
-        visited_directories.add(directory_cluster)
-
-        long_name_parts = []
+        lfn_parts = []
         visited_clusters = set()
-        current_cluster = directory_cluster
+        cur_cluster = dir_cluster
 
         while True:
-            self.drive_reader.validate_cluster_number(current_cluster, layout)
-            if current_cluster in visited_clusters:
-                raise FAT32ReaderError("Detected a loop while following a FAT32 cluster chain.")
+            self.drive_reader.validate_cluster_number(cur_cluster, layout)
+            if cur_cluster in visited_clusters:
+                raise FAT32ReaderError("Phat hien vong lap trong FAT chain.")
+            visited_clusters.add(cur_cluster)
 
-            visited_clusters.add(current_cluster)
-            cluster_data = self.drive_reader.read_cluster(source, layout, current_cluster)
+            cluster_data = self.drive_reader.read_cluster(source, layout, cur_cluster)
 
             for offset in range(0, len(cluster_data), self.drive_reader.DIRECTORY_ENTRY_SIZE):
-                entry_data = cluster_data[offset : offset + self.drive_reader.DIRECTORY_ENTRY_SIZE]
-                if len(entry_data) < self.drive_reader.DIRECTORY_ENTRY_SIZE:
+                entry = cluster_data[offset:offset + self.drive_reader.DIRECTORY_ENTRY_SIZE]
+                if len(entry) < self.drive_reader.DIRECTORY_ENTRY_SIZE:
                     return
 
-                first_byte = entry_data[0]
+                first_byte = entry[0]
                 if first_byte == 0x00:
                     return
-
                 if first_byte == 0xE5:
-                    long_name_parts = []
+                    lfn_parts = []
                     continue
 
-                attributes = entry_data[11]
-                if attributes == self.ATTR_LONG_FILE_NAME:
-                    long_name_parts.insert(0, self._parse_lfn_fragment(entry_data))
+                attr = entry[11]
+                if attr == self.ATTR_LONG_FILE_NAME:
+                    lfn_parts.insert(0, self._get_lfn_text(entry))
                     continue
 
-                if long_name_parts:
-                    entry_name = "".join(long_name_parts).strip()
+                if lfn_parts:
+                    name = "".join(lfn_parts).strip()
                 else:
-                    entry_name = self._parse_short_name(entry_data)
+                    name = self._get_short_name(entry)
+                lfn_parts = []
 
-                long_name_parts = []
-
-                if not entry_name:
+                if not name:
                     continue
-                if attributes & self.ATTR_VOLUME_ID:
+                if attr & self.ATTR_VOLUME_ID:
                     continue
 
-                starting_cluster = self._read_starting_cluster(entry_data)
-                file_size = int.from_bytes(entry_data[28:32], byteorder="little")
+                start_cluster = self._get_start_cluster(entry)
+                size = int.from_bytes(entry[28:32], "little")
 
-                if attributes & self.ATTR_DIRECTORY:
-                    if entry_name == "." or entry_name == "..":
+                if attr & self.ATTR_DIRECTORY:
+                    if name == "." or name == "..":
                         continue
-                    if starting_cluster < 2:
+                    if start_cluster < 2:
                         continue
-
-                    self._scan_directory(
-                        source,
-                        layout,
-                        fat_table,
-                        starting_cluster,
-                        parent_directories + [entry_name],
-                        visited_directories,
-                        txt_files,
-                    )
+                    self._scan_dir(source, layout, fat_table, start_cluster,
+                                   parent_dirs + [name], visited_dirs, txt_files)
                     continue
 
-                if not entry_name.lower().endswith(".txt"):
+                if not name.lower().endswith(".txt"):
                     continue
 
-                if parent_directories:
-                    directory_path = "/" + "/".join(parent_directories)
+                if parent_dirs:
+                    dir_path = "/" + "/".join(parent_dirs)
                 else:
-                    directory_path = "/"
+                    dir_path = "/"
 
-                txt_files.append(
-                    TxtFileEntry(
-                        file_name=entry_name,
-                        directory_path=directory_path,
-                        file_size=file_size,
-                        starting_cluster=starting_cluster,
-                    )
-                )
+                txt_files.append(TxtFileEntry(name, dir_path, size, start_cluster))
 
-            next_cluster = self._read_fat_entry(fat_table, current_cluster)
+            next_cluster = self._read_fat_entry(fat_table, cur_cluster)
             if next_cluster >= self.FAT32_END_OF_CHAIN:
                 return
             if next_cluster == 0:
-                raise FAT32ReaderError(
-                    f"Cluster {current_cluster} points to a free cluster, so the FAT32 chain looks invalid."
-                )
+                raise FAT32ReaderError(f"Cluster {cur_cluster} tro den cluster trong.")
             if next_cluster == self.FAT32_BAD_CLUSTER:
-                raise FAT32ReaderError(f"Cluster {current_cluster} points to a bad cluster.")
+                raise FAT32ReaderError(f"Cluster {cur_cluster} tro den bad cluster.")
 
-            current_cluster = next_cluster
+            cur_cluster = next_cluster
 
-    def _read_fat_entry(self, fat_table: bytes, cluster_number: int) -> int:
-        fat_entry_offset = cluster_number * self.FAT_ENTRY_SIZE
-        end_offset = fat_entry_offset + self.FAT_ENTRY_SIZE
+    def _read_fat_entry(self, fat_table, cluster_num):
+        offset = cluster_num * self.FAT_ENTRY_SIZE
+        end = offset + self.FAT_ENTRY_SIZE
+        if end > len(fat_table):
+            raise FAT32ReaderError(f"Cluster {cluster_num} vuot qua bang FAT.")
+        raw = fat_table[offset:end]
+        return int.from_bytes(raw, "little") & self.FAT32_CLUSTER_MASK
 
-        if end_offset > len(fat_table):
-            raise FAT32ReaderError(
-                f"Cluster {cluster_number} points outside the FAT table, so the FAT32 chain looks invalid."
-            )
+    def _get_start_cluster(self, entry):
+        high = int.from_bytes(entry[20:22], "little")
+        low = int.from_bytes(entry[26:28], "little")
+        return (high << 16) | low
 
-        raw_value = fat_table[fat_entry_offset:end_offset]
-        return int.from_bytes(raw_value, byteorder="little") & self.FAT32_CLUSTER_MASK
-
-    def _read_starting_cluster(self, entry_data: bytes) -> int:
-        high_word = int.from_bytes(entry_data[20:22], byteorder="little")
-        low_word = int.from_bytes(entry_data[26:28], byteorder="little")
-        return (high_word << 16) | low_word
-
-    def _parse_short_name(self, entry_data: bytes) -> str:
-        raw_name = entry_data[0:8]
-        raw_extension = entry_data[8:11]
+    def _get_short_name(self, entry):
+        raw_name = entry[0:8]
+        raw_ext = entry[8:11]
         name = raw_name.decode("ascii", errors="ignore").rstrip()
-        extension = raw_extension.decode("ascii", errors="ignore").rstrip()
-
+        ext = raw_ext.decode("ascii", errors="ignore").rstrip()
         if not name:
             return ""
-        if extension:
-            return f"{name}.{extension}"
+        if ext:
+            return f"{name}.{ext}"
         return name
 
-    def _parse_lfn_fragment(self, entry_data: bytes) -> str:
-        raw_name = entry_data[1:11] + entry_data[14:26] + entry_data[28:32]
-        characters = []
-
-        for index in range(0, len(raw_name), 2):
-            raw_character = raw_name[index : index + 2]
-            if raw_character == b"\x00\x00" or raw_character == b"\xff\xff":
+    def _get_lfn_text(self, entry):
+        raw = entry[1:11] + entry[14:26] + entry[28:32]
+        chars = []
+        for i in range(0, len(raw), 2):
+            c = raw[i:i + 2]
+            if c == b"\x00\x00" or c == b"\xff\xff":
                 break
-            characters.append(raw_character.decode("utf-16le", errors="ignore"))
-
-        return "".join(characters)
+            chars.append(c.decode("utf-16le", errors="ignore"))
+        return "".join(chars)
