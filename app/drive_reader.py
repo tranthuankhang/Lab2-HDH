@@ -20,20 +20,20 @@ class FAT32ReaderError(Exception):
 
 
 class FAT32Layout:
-    def __init__(self, bytes_per_sector, sectors_per_cluster, reserved_sector_count,
-                 fat_count, sectors_per_fat, root_dir_sectors, total_sectors, root_cluster):
+    def __init__(self, bytes_per_sector, sectors_per_cluster, sectors_before_fat,
+                 fat_count, sectors_per_fat, RDET_sectors, total_sectors, RDET_start_cluster):
         self.bytes_per_sector = bytes_per_sector
         self.sectors_per_cluster = sectors_per_cluster
-        self.reserved_sector_count = reserved_sector_count
+        self.sectors_before_fat = sectors_before_fat
         self.fat_count = fat_count
         self.sectors_per_fat = sectors_per_fat
-        self.root_dir_sectors = root_dir_sectors
+        self.RDET_sectors = RDET_sectors  # thường là 0 trong FAT32
         self.total_sectors = total_sectors
-        self.root_cluster = root_cluster
+        self.RDET_start_cluster = RDET_start_cluster  # thường là 2
 
-        self.cluster_size = bytes_per_sector * sectors_per_cluster
-        self.fat_offset_bytes = reserved_sector_count * bytes_per_sector
-        self.first_data_sector = reserved_sector_count + (fat_count * sectors_per_fat) + root_dir_sectors
+        self.cluster_size_bytes = bytes_per_sector * sectors_per_cluster
+        self.fat_offset_bytes = sectors_before_fat * bytes_per_sector
+        self.first_data_sector = sectors_before_fat + (fat_count * sectors_per_fat) + RDET_sectors
         self.data_sector_count = max(total_sectors - self.first_data_sector, 0)
 
         if sectors_per_cluster > 0:
@@ -45,8 +45,6 @@ class FAT32Layout:
 
 
 class DriveReader:
-    BOOT_SECTOR_SIZE = 512
-    DIRECTORY_ENTRY_SIZE = 32
     DRIVE_PATTERN = re.compile(r"^[A-Za-z]:\\?$")
 
     def __init__(self):
@@ -107,7 +105,7 @@ class DriveReader:
     def get_boot_sector_bytes(self, source):
         self.set_source(source)
         if self.boot_sector_bytes is None:
-            self.boot_sector_bytes = self._read_raw(0, self.BOOT_SECTOR_SIZE)
+            self.boot_sector_bytes = self._read_raw(0, 512)  # 512 = boot sector size
         return self.boot_sector_bytes
 
     def remember_boot_sector_info(self, source, info):
@@ -127,19 +125,19 @@ class DriveReader:
             raise FAT32ReaderError("sectors_per_cluster phai > 0")
         if info.sectors_per_fat <= 0:
             raise FAT32ReaderError("sectors_per_fat phai > 0")
-        if info.root_cluster < 2:
-            raise FAT32ReaderError("root_cluster phai >= 2")
+        if info.RDET_start_cluster < 2:
+            raise FAT32ReaderError("RDET_start_cluster phai >= 2")
 
         if self.layout is None:
             self.layout = FAT32Layout(
                 info.bytes_per_sector,
                 info.sectors_per_cluster,
-                info.reserved_sector_count,
+                info.sectors_before_fat,
                 info.fat_count,
                 info.sectors_per_fat,
-                info.root_dir_sectors,
+                info.RDET_sectors,
                 info.total_sectors,
-                info.root_cluster,
+                info.RDET_start_cluster,
             )
 
         if self.layout.total_clusters <= 0:
@@ -159,7 +157,7 @@ class DriveReader:
         self.validate_cluster_number(cluster_number, layout)
         first_sector = layout.first_data_sector + ((cluster_number - 2) * layout.sectors_per_cluster)
         offset = first_sector * layout.bytes_per_sector
-        return self._read_raw(offset, layout.cluster_size)
+        return self._read_raw(offset, layout.cluster_size_bytes)
 
     def _read_raw(self, offset, size):
         if self.stream is None:

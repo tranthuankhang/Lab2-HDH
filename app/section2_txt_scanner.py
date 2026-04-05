@@ -19,14 +19,6 @@ class TxtFileEntry:
 
 
 class TxtFileScanner:
-    FAT_ENTRY_SIZE = 4
-    FAT32_CLUSTER_MASK = 0x0FFFFFFF
-    FAT32_BAD_CLUSTER = 0x0FFFFFF7
-    FAT32_END_OF_CHAIN = 0x0FFFFFF8
-    ATTR_LONG_FILE_NAME = 0x0F
-    ATTR_DIRECTORY = 0x10
-    ATTR_VOLUME_ID = 0x08
-
     def __init__(self, drive_reader=None):
         if drive_reader is None:
             drive_reader = DriveReader()
@@ -43,7 +35,7 @@ class TxtFileScanner:
 
         txt_files = []
         visited_dirs = set()
-        self._scan_dir(source, layout, fat_table, layout.root_cluster, [], visited_dirs, txt_files)
+        self._scan_dir(source, layout, fat_table, layout.RDET_start_cluster, [], visited_dirs, txt_files)
         txt_files.sort(key=lambda f: (f.directory_path.casefold(), f.file_name.casefold()))
         return txt_files
 
@@ -66,9 +58,9 @@ class TxtFileScanner:
 
             cluster_data = self.drive_reader.read_cluster(source, layout, cur_cluster)
 
-            for offset in range(0, len(cluster_data), self.drive_reader.DIRECTORY_ENTRY_SIZE):
-                entry = cluster_data[offset:offset + self.drive_reader.DIRECTORY_ENTRY_SIZE]
-                if len(entry) < self.drive_reader.DIRECTORY_ENTRY_SIZE:
+            for offset in range(0, len(cluster_data), 32):  # 32 = directory entry size (bytes)
+                entry = cluster_data[offset:offset + 32]  # 32 = directory entry size (bytes)
+                if len(entry) < 32:  # 32 = directory entry size (bytes)
                     return
 
                 first_byte = entry[0]
@@ -79,7 +71,7 @@ class TxtFileScanner:
                     continue
 
                 attr = entry[11]
-                if attr == self.ATTR_LONG_FILE_NAME:
+                if attr == 0x0F:  # ATTR_LONG_FILE_NAME
                     lfn_parts.insert(0, self._get_lfn_text(entry))
                     continue
 
@@ -91,13 +83,13 @@ class TxtFileScanner:
 
                 if not name:
                     continue
-                if attr & self.ATTR_VOLUME_ID:
+                if attr & 0x08:  # ATTR_VOLUME_ID
                     continue
 
                 start_cluster = self._get_start_cluster(entry)
                 size = int.from_bytes(entry[28:32], "little")
 
-                if attr & self.ATTR_DIRECTORY:
+                if attr & 0x10:  # ATTR_DIRECTORY
                     if name == "." or name == "..":
                         continue
                     if start_cluster < 2:
@@ -117,22 +109,22 @@ class TxtFileScanner:
                 txt_files.append(TxtFileEntry(name, dir_path, size, start_cluster))
 
             next_cluster = self._read_fat_entry(fat_table, cur_cluster)
-            if next_cluster >= self.FAT32_END_OF_CHAIN:
+            if next_cluster >= 0x0FFFFFF8:  # FAT32 end of chain marker
                 return
             if next_cluster == 0:
                 raise FAT32ReaderError(f"Cluster {cur_cluster} tro den cluster trong.")
-            if next_cluster == self.FAT32_BAD_CLUSTER:
+            if next_cluster == 0x0FFFFFF7:  # FAT32 bad cluster marker
                 raise FAT32ReaderError(f"Cluster {cur_cluster} tro den bad cluster.")
 
             cur_cluster = next_cluster
 
     def _read_fat_entry(self, fat_table, cluster_num):
-        offset = cluster_num * self.FAT_ENTRY_SIZE
-        end = offset + self.FAT_ENTRY_SIZE
+        offset = cluster_num * 4  # 4 = FAT32 entry size (bytes)
+        end = offset + 4  # 4 = FAT32 entry size (bytes)
         if end > len(fat_table):
             raise FAT32ReaderError(f"Cluster {cluster_num} vuot qua bang FAT.")
         raw = fat_table[offset:end]
-        return int.from_bytes(raw, "little") & self.FAT32_CLUSTER_MASK
+        return int.from_bytes(raw, "little") & 0x0FFFFFFF  # FAT32 cluster number mask
 
     def _get_start_cluster(self, entry):
         high = int.from_bytes(entry[20:22], "little")
