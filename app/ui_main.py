@@ -23,7 +23,8 @@ from PySide6.QtWidgets import (
 
 from app.drive_reader import DriveReader
 from app.section1_boot_sector_reader import FAT32ReaderError, BootSectorReader
-from app.section2_txt_scanner import TxtFileScanner
+from app.section3_txt_info_reader import TxtFileInfoReader
+from app.section4_scheduler_runner import SchedulingRunner
 
 
 APP_STYLE = """
@@ -254,10 +255,12 @@ class TextFilesTab(QWidget):
     def __init__(self, status_callback, drive_reader=None):
         super().__init__()
         self.status_callback = status_callback
-        self.reader = TxtFileScanner(drive_reader)
+        self.reader = TxtFileInfoReader(drive_reader)
+        self.scheduler = SchedulingRunner()
         self.catalog_entries = []
         self.current_source = None
         self.detail_labels = {}
+        self.last_parsed_info = None
 
         self.status_label = create_note("Read the Boot Sector in the first tab to load TXT files automatically.")
 
@@ -328,8 +331,7 @@ class TextFilesTab(QWidget):
 
         layout.addWidget(
             create_note(
-                "This panel only keeps the required fields for Section 3. Date created and time created "
-                "will be filled when Section 3 is implemented."
+                "File metadata extracted from the FAT32 directory entry."
             )
         )
 
@@ -362,8 +364,7 @@ class TextFilesTab(QWidget):
         layout.setSpacing(10)
         layout.addWidget(
             create_note(
-                "This table is reserved for process information parsed from the selected TXT file, "
-                "including the scheduling algorithm name for each process row."
+                "Process information parsed from the selected TXT file."
             )
         )
         layout.addWidget(self.process_table)
@@ -374,9 +375,45 @@ class TextFilesTab(QWidget):
         layout = QVBoxLayout(group)
         layout.setContentsMargins(12, 16, 12, 12)
         layout.setSpacing(10)
-        layout.addWidget(
-            create_note("Section 4 is still reserved. The scheduling algorithm output will be added later.")
+
+        # nút chạy scheduling
+        self.run_scheduling_button = QPushButton("Run Scheduling")
+        self.run_scheduling_button.setEnabled(False)
+        self.run_scheduling_button.clicked.connect(self.run_scheduling)
+        layout.addWidget(self.run_scheduling_button)
+
+        # bảng Gantt chart (scheduling diagram)
+        gantt_label = QLabel("CPU Scheduling Diagram")
+        gantt_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(gantt_label)
+
+        self.gantt_table = create_table(["[Start - End]", "Queue", "Process"])
+        self.gantt_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.gantt_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.gantt_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        layout.addWidget(self.gantt_table)
+
+        # bảng thống kê Turnaround & Waiting
+        stats_label = QLabel("Process Statistics")
+        stats_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(stats_label)
+
+        self.stats_table = create_table(
+            ["Process", "Arrival", "Burst", "Finish", "Turnaround", "Waiting"]
         )
+        for col in range(6):
+            self.stats_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Stretch)
+        layout.addWidget(self.stats_table)
+
+        # label trung bình
+        form = QFormLayout()
+        form.setSpacing(6)
+        self.avg_turnaround_label = create_value_label()
+        self.avg_waiting_label = create_value_label()
+        form.addRow("Average Turnaround Time:", self.avg_turnaround_label)
+        form.addRow("Average Waiting Time:", self.avg_waiting_label)
+        layout.addLayout(form)
+
         return group
 
     def load_txt_files_for_source(self, source):
@@ -458,20 +495,134 @@ class TextFilesTab(QWidget):
             return
 
         selected_file = self.catalog_entries[row]
-        self.detail_labels["name"].setText(selected_file.file_name)
-        self.detail_labels["date_created"].setText("Reserved for Section 3")
-        self.detail_labels["time_created"].setText("Reserved for Section 3")
+
+        # --- Section 3: đọc thông tin chi tiết file TXT ---
+        try:
+            info = self.reader.read_txt_file_info(self.current_source, selected_file)
+        except (FAT32ReaderError, Exception) as exc:
+            self.detail_labels["name"].setText(selected_file.file_name)
+            self.detail_labels["date_created"].setText("Error")
+            self.detail_labels["time_created"].setText("Error")
+            self.detail_labels["total_size"].setText(selected_file.get_size_display())
+            self.process_table.clearContents()
+            self.process_table.setRowCount(0)
+            self.last_parsed_info = None
+            self.run_scheduling_button.setEnabled(False)
+            self.clear_section4()
+            self.status_callback(f"Section 3 error: {exc}")
+            QMessageBox.critical(self, "Unable to Read TXT File Details", str(exc))
+            return
+
+        self.last_parsed_info = info
+
+        # hiển thị metadata
+        self.detail_labels["name"].setText(info["file_name"])
+        self.detail_labels["date_created"].setText(info["date_created"])
+        self.detail_labels["time_created"].setText(info["time_created"])
         self.detail_labels["total_size"].setText(selected_file.get_size_display())
 
-        self.process_table.clearContents()
-        self.process_table.setRowCount(0)
+        # hiển thị bảng process
+        processes = info["processes"]
+        self.process_table.setRowCount(len(processes))
+        for i, p in enumerate(processes):
+            set_table_text(self.process_table, i, 0, p["process_id"])
+            set_table_text(self.process_table, i, 1, str(p["arrival_time"]))
+            set_table_text(self.process_table, i, 2, str(p["cpu_burst_time"]))
+            set_table_text(self.process_table, i, 3, p["priority_queue_id"])
+            set_table_text(self.process_table, i, 4, str(p["time_slice"]))
+            set_table_text(self.process_table, i, 5, p["algorithm"])
+
+        # bật nút Run Scheduling nếu có process
+        self.run_scheduling_button.setEnabled(len(processes) > 0)
+        self.clear_section4()
+        self.status_callback(f"Loaded {len(processes)} processes from {info['file_name']}.")
 
     def clear_section3(self):
         for label in self.detail_labels.values():
             label.setText("-")
-
         self.process_table.clearContents()
         self.process_table.setRowCount(0)
+        self.last_parsed_info = None
+        self.run_scheduling_button.setEnabled(False)
+        self.clear_section4()
+
+    def clear_section4(self):
+        self.gantt_table.clearContents()
+        self.gantt_table.setRowCount(0)
+        self.stats_table.clearContents()
+        self.stats_table.setRowCount(0)
+        self.avg_turnaround_label.setText("-")
+        self.avg_waiting_label.setText("-")
+
+    # --- Section 4: chạy scheduling và hiển thị kết quả ---
+
+    def run_scheduling(self):
+        if self.last_parsed_info is None:
+            return
+
+        queues = self.last_parsed_info["queues"]
+        processes = self.last_parsed_info["processes"]
+
+        try:
+            result = self.scheduler.run(queues, processes)
+        except Exception as exc:
+            self.clear_section4()
+            self.status_callback(f"Scheduling error: {exc}")
+            QMessageBox.critical(self, "Scheduling Error", str(exc))
+            return
+
+        self.show_scheduling_result(result, processes)
+        self.status_callback("Scheduling completed.")
+
+    def show_scheduling_result(self, result, processes_info):
+        # --- bảng Gantt chart ---
+        self.gantt_table.setRowCount(len(result.slices))
+        for i, s in enumerate(result.slices):
+            set_table_text(self.gantt_table, i, 0, f"[{s.start_time} - {s.end_time}]")
+            set_table_text(self.gantt_table, i, 1, s.queue_id)
+            set_table_text(self.gantt_table, i, 2, s.process_id)
+
+        # tạo lookup process theo pid
+        proc_map = {}
+        for p in processes_info:
+            proc_map[p["process_id"]] = p
+
+        # sắp xếp theo số thứ tự process (P1, P2, ...)
+        sorted_pids = sorted(
+            result.turnaround_times.keys(),
+            key=lambda pid: int(pid[1:]),
+        )
+
+        # --- bảng thống kê ---
+        self.stats_table.setRowCount(len(sorted_pids))
+        total_turnaround = 0
+        total_waiting = 0
+
+        for i, pid in enumerate(sorted_pids):
+            p = proc_map[pid]
+            turnaround = result.turnaround_times[pid]
+            waiting = result.waiting_times[pid]
+            finish = p["arrival_time"] + turnaround
+
+            set_table_text(self.stats_table, i, 0, pid)
+            set_table_text(self.stats_table, i, 1, str(p["arrival_time"]))
+            set_table_text(self.stats_table, i, 2, str(p["cpu_burst_time"]))
+            set_table_text(self.stats_table, i, 3, str(finish))
+            set_table_text(self.stats_table, i, 4, str(turnaround))
+            set_table_text(self.stats_table, i, 5, str(waiting))
+
+            total_turnaround += turnaround
+            total_waiting += waiting
+
+        # trung bình
+        if sorted_pids:
+            avg_turn = total_turnaround / len(sorted_pids)
+            avg_wait = total_waiting / len(sorted_pids)
+            self.avg_turnaround_label.setText(f"{avg_turn:.1f}")
+            self.avg_waiting_label.setText(f"{avg_wait:.1f}")
+        else:
+            self.avg_turnaround_label.setText("-")
+            self.avg_waiting_label.setText("-")
 
 
 class MainWindow(QMainWindow):
