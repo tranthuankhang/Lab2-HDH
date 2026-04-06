@@ -30,16 +30,15 @@ class TxtFileScanner:
         if boot_info is None:
             boot_info = self.boot_sector_reader.read_boot_sector(source)
 
-        layout = self.drive_reader.build_layout(source, boot_info)
-        fat_table = self.drive_reader.get_fat_table(source, layout)
+        fat_table = self.drive_reader.get_fat_table(source, boot_info)
 
         txt_files = []
         visited_dirs = set()
-        self._scan_dir(source, layout, fat_table, layout.RDET_start_cluster, [], visited_dirs, txt_files)
+        self._scan_dir(source, boot_info, fat_table, boot_info.RDET_start_cluster, [], visited_dirs, txt_files)
         txt_files.sort(key=lambda f: (f.directory_path.casefold(), f.file_name.casefold()))
         return txt_files
 
-    def _scan_dir(self, source, layout, fat_table, dir_cluster, parent_dirs, visited_dirs, txt_files):
+    def _scan_dir(self, source, boot_info, fat_table, dir_cluster, parent_dirs, visited_dirs, txt_files):
         if dir_cluster < 2:
             return
         if dir_cluster in visited_dirs:
@@ -51,12 +50,12 @@ class TxtFileScanner:
         cur_cluster = dir_cluster
 
         while True:
-            self.drive_reader.validate_cluster_number(cur_cluster, layout)
+            self.drive_reader.validate_cluster_number(cur_cluster, boot_info)
             if cur_cluster in visited_clusters:
                 raise FAT32ReaderError("Phat hien vong lap trong FAT chain.")
             visited_clusters.add(cur_cluster)
 
-            cluster_data = self.drive_reader.read_cluster(source, layout, cur_cluster)
+            cluster_data = self.drive_reader.read_cluster(source, boot_info, cur_cluster)
 
             for offset in range(0, len(cluster_data), 32):  # 32 = directory entry size (bytes)
                 entry = cluster_data[offset:offset + 32]  # 32 = directory entry size (bytes)
@@ -94,7 +93,7 @@ class TxtFileScanner:
                         continue
                     if start_cluster < 2:
                         continue
-                    self._scan_dir(source, layout, fat_table, start_cluster,
+                    self._scan_dir(source, boot_info, fat_table, start_cluster,
                                    parent_dirs + [name], visited_dirs, txt_files)
                     continue
 

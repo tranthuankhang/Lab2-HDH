@@ -2,18 +2,41 @@ from app.drive_reader import DriveReader, FAT32ReaderError
 
 
 class BootSectorInfo:
-    def __init__(self, source_display, bytes_per_sector, sectors_per_cluster,
-                 sectors_before_fat, fat_count, sectors_per_fat,
-                 RDET_sectors, total_sectors, RDET_start_cluster):
+    def __init__(
+        self,
+        source_display,
+        bytes_per_sector,
+        sectors_per_cluster,
+        sectors_before_fat,
+        fat_count,
+        sectors_per_fat,
+        RDET_sectors,
+        total_sectors,
+        RDET_start_cluster,
+    ):
         self.source_display = source_display
         self.bytes_per_sector = bytes_per_sector
         self.sectors_per_cluster = sectors_per_cluster
         self.sectors_before_fat = sectors_before_fat
         self.fat_count = fat_count
         self.sectors_per_fat = sectors_per_fat
-        self.RDET_sectors = RDET_sectors  # thường là 0 trong FAT32
+        self.RDET_sectors = RDET_sectors  # usually 0 in FAT32
         self.total_sectors = total_sectors
-        self.RDET_start_cluster = RDET_start_cluster  # thường là 2
+        self.RDET_start_cluster = RDET_start_cluster  # usually 2
+
+        # Derived values reused by later sections.
+        self.cluster_size_bytes = bytes_per_sector * sectors_per_cluster
+        self.fat_size_bytes = sectors_per_fat * bytes_per_sector
+        self.fat_offset_bytes = sectors_before_fat * bytes_per_sector
+        self.first_data_sector = sectors_before_fat + (fat_count * sectors_per_fat) + RDET_sectors
+        self.data_sector_count = max(total_sectors - self.first_data_sector, 0)
+
+        if sectors_per_cluster > 0:
+            self.total_clusters = self.data_sector_count // sectors_per_cluster
+        else:
+            self.total_clusters = 0
+
+        self.max_cluster_number = self.total_clusters + 1
 
     def table_rows(self):
         return [
@@ -37,7 +60,7 @@ class BootSectorReader:
         source_display = self.drive_reader.set_source(source)
         raw = self.drive_reader.get_boot_sector_bytes(source)
         info = self._parse(raw, source_display)
-        self.drive_reader.remember_boot_sector_info(source, info)
+        self.drive_reader.set_boot_sector_info(source, info)
         return info
 
     def _parse(self, raw, source_display):
@@ -51,17 +74,22 @@ class BootSectorReader:
         sectors_per_cluster = raw[13]
         sectors_before_fat = int.from_bytes(raw[14:16], "little")
         fat_count = raw[16]
-        # FAT32: total sectors luôn ở offset 32, sectors/FAT luôn ở offset 36
         total_sectors = int.from_bytes(raw[32:36], "little")
         sectors_per_fat = int.from_bytes(raw[36:40], "little")
         RDET_start_cluster = int.from_bytes(raw[44:48], "little")
-        RDET_entry_count = int.from_bytes(raw[17:19], "little")  # FAT32 luôn = 0
-        
+        RDET_entry_count = int.from_bytes(raw[17:19], "little")  # always 0 in FAT32
+
         RDET_bytes = RDET_entry_count * 32  # 32 = directory entry size (bytes)
-        RDET_sectors = (RDET_bytes + bytes_per_sector - 1) // bytes_per_sector  # thường = 0
+        RDET_sectors = (RDET_bytes + bytes_per_sector - 1) // bytes_per_sector
 
         return BootSectorInfo(
-            source_display, bytes_per_sector, sectors_per_cluster,
-            sectors_before_fat, fat_count, sectors_per_fat,
-            RDET_sectors, total_sectors, RDET_start_cluster,
+            source_display,
+            bytes_per_sector,
+            sectors_per_cluster,
+            sectors_before_fat,
+            fat_count,
+            sectors_per_fat,
+            RDET_sectors,
+            total_sectors,
+            RDET_start_cluster,
         )

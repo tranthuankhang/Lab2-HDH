@@ -34,16 +34,16 @@ class TxtFileInfoReader(TxtFileScanner):
         if not selected_file.file_name:
             raise ValueError("A TXT file must be selected before reading its details.")
 
-        # --- Chuan bi: lay boot sector, layout va FAT table ---
-        layout, fat_table = self._prepare_fat_access(source)
+        # --- Chuan bi: lay boot sector info va FAT table ---
+        boot_info, fat_table = self._prepare_fat_access(source)
 
         # --- Lay ngay gio tao tu directory entry ---
         date_created, time_created = self._find_creation_datetime(
-            source, layout, fat_table, selected_file
+            source, boot_info, fat_table, selected_file
         )
 
         # --- Doc noi dung file tu cluster chain ---
-        raw_bytes = self._read_file_content(source, layout, fat_table, selected_file)
+        raw_bytes = self._read_file_content(source, boot_info, fat_table, selected_file)
         text = raw_bytes.decode("utf-8", errors="ignore")
 
         # --- Parse noi dung file theo format Lab1 ---
@@ -60,23 +60,22 @@ class TxtFileInfoReader(TxtFileScanner):
         }
 
     # ------------------------------------------------------------
-    #  CHUAN BI: lay layout va fat table tu source
+    #  CHUAN BI: lay boot sector info va fat table tu source
     # ------------------------------------------------------------
 
     def _prepare_fat_access(self, source):
-        """Lay FAT32 layout va FAT table de su dung cho cac buoc sau."""
+        """Lay Boot Sector info va FAT table de su dung cho cac buoc sau."""
         boot_info = self.drive_reader.get_boot_sector_info(source)
         if boot_info is None:
             boot_info = self.boot_sector_reader.read_boot_sector(source)
-        layout = self.drive_reader.build_layout(source, boot_info)
-        fat_table = self.drive_reader.get_fat_table(source, layout)
-        return layout, fat_table
+        fat_table = self.drive_reader.get_fat_table(source, boot_info)
+        return boot_info, fat_table
 
     # ------------------------------------------------------------
     #  DOC NOI DUNG FILE THEO FAT CHAIN
     # ------------------------------------------------------------
 
-    def _read_file_content(self, source, layout, fat_table, selected_file):
+    def _read_file_content(self, source, boot_info, fat_table, selected_file):
         """
         Doc toan bo noi dung file bang cach di theo FAT chain.
 
@@ -103,8 +102,8 @@ class TxtFileInfoReader(TxtFileScanner):
             visited.add(cluster)
 
             # Doc du lieu cua cluster hien tai va noi vao buffer
-            self.drive_reader.validate_cluster_number(cluster, layout)
-            chunk = self.drive_reader.read_cluster(source, layout, cluster)
+            self.drive_reader.validate_cluster_number(cluster, boot_info)
+            chunk = self.drive_reader.read_cluster(source, boot_info, cluster)
             data.extend(chunk)
 
             # Tra bang FAT de tim cluster ke tiep trong chain
@@ -123,7 +122,7 @@ class TxtFileInfoReader(TxtFileScanner):
     #  TIM NGAY GIO TAO TU DIRECTORY ENTRY
     # ------------------------------------------------------------
 
-    def _find_creation_datetime(self, source, layout, fat_table, selected_file):
+    def _find_creation_datetime(self, source, boot_info, fat_table, selected_file):
         """
         Tim directory entry 32-byte cua file va giai ma ngay gio tao.
 
@@ -135,14 +134,14 @@ class TxtFileInfoReader(TxtFileScanner):
             4. Giai ma 2 bytes creation_time va 2 bytes creation_date.
         """
         # --- Buoc 1: bat dau tu RDET ---
-        dir_cluster = layout.RDET_start_cluster
+        dir_cluster = boot_info.RDET_start_cluster
 
         # --- Buoc 2: neu file trong thu muc con, di theo duong dan ---
         path = selected_file.directory_path.strip("/")
         if path:
             for folder_name in path.split("/"):
                 dir_cluster = self._find_entry_in_dir(
-                    source, layout, fat_table, dir_cluster,
+                    source, boot_info, fat_table, dir_cluster,
                     match_folder=folder_name,
                 )
                 if dir_cluster is None:
@@ -150,7 +149,7 @@ class TxtFileInfoReader(TxtFileScanner):
 
         # --- Buoc 3: tim entry cua file trong thu muc chua no ---
         entry = self._find_entry_in_dir(
-            source, layout, fat_table, dir_cluster,
+            source, boot_info, fat_table, dir_cluster,
             match_file=selected_file,
         )
         if entry is None:
@@ -159,7 +158,7 @@ class TxtFileInfoReader(TxtFileScanner):
         # --- Buoc 4: giai ma ngay gio tao ---
         return self._decode_datetime(entry)
 
-    def _find_entry_in_dir(self, source, layout, fat_table, dir_cluster,
+    def _find_entry_in_dir(self, source, boot_info, fat_table, dir_cluster,
                            match_folder=None, match_file=None):
         """
         Duyet tat ca entry trong mot thu muc (co the gom nhieu cluster).
@@ -183,8 +182,8 @@ class TxtFileInfoReader(TxtFileScanner):
             visited.add(cur)
 
             # Doc toan bo du lieu cua cluster hien tai
-            self.drive_reader.validate_cluster_number(cur, layout)
-            data = self.drive_reader.read_cluster(source, layout, cur)
+            self.drive_reader.validate_cluster_number(cur, boot_info)
+            data = self.drive_reader.read_cluster(source, boot_info, cur)
 
             # Duyet tung entry (moi entry = 32 bytes)
             for off in range(0, len(data), 32):
