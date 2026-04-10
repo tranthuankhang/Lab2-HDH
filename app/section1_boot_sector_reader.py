@@ -10,7 +10,6 @@ class BootSectorInfo:
         sectors_before_fat,
         fat_count,
         sectors_per_fat,
-        RDET_sectors,
         total_sectors,
         RDET_start_cluster,
     ):
@@ -20,7 +19,6 @@ class BootSectorInfo:
         self.sectors_before_fat = sectors_before_fat
         self.fat_count = fat_count
         self.sectors_per_fat = sectors_per_fat
-        self.RDET_sectors = RDET_sectors  # usually 0 in FAT32
         self.total_sectors = total_sectors
         self.RDET_start_cluster = RDET_start_cluster  # usually 2
 
@@ -28,7 +26,7 @@ class BootSectorInfo:
         self.cluster_size_bytes = bytes_per_sector * sectors_per_cluster
         self.fat_size_bytes = sectors_per_fat * bytes_per_sector
         self.fat_offset_bytes = sectors_before_fat * bytes_per_sector
-        self.first_data_sector = sectors_before_fat + (fat_count * sectors_per_fat) + RDET_sectors
+        self.first_data_sector = sectors_before_fat + (fat_count * sectors_per_fat)
         self.data_sector_count = max(total_sectors - self.first_data_sector, 0)
 
         if sectors_per_cluster > 0:
@@ -45,7 +43,6 @@ class BootSectorInfo:
             ("Number of sectors in Boot Sector region", str(self.sectors_before_fat)),
             ("Number of FAT tables", str(self.fat_count)),
             ("Number of sectors per FAT table", str(self.sectors_per_fat)),
-            ("Number of sectors for the RDET", str(self.RDET_sectors)),
             ("Total number of sectors on the disk", str(self.total_sectors)),
         ]
 
@@ -77,10 +74,6 @@ class BootSectorReader:
         total_sectors = int.from_bytes(raw[32:36], "little")
         sectors_per_fat = int.from_bytes(raw[36:40], "little")
         RDET_start_cluster = int.from_bytes(raw[44:48], "little")
-        RDET_entry_count = int.from_bytes(raw[17:19], "little")  # always 0 in FAT32
-
-        RDET_bytes = RDET_entry_count * 32  # 32 = directory entry size (bytes)
-        RDET_sectors = (RDET_bytes + bytes_per_sector - 1) // bytes_per_sector
 
         return BootSectorInfo(
             source_display,
@@ -89,7 +82,6 @@ class BootSectorReader:
             sectors_before_fat,
             fat_count,
             sectors_per_fat,
-            RDET_sectors,
             total_sectors,
             RDET_start_cluster,
         )
