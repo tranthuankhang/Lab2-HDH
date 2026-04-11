@@ -65,7 +65,7 @@ class DriveReader:
         self.current_source = normalized
         return normalized
 
-    def get_boot_sector_bytes(self, source):
+    def get_boot_sector_bytes(self, source): #get/set
         self.set_source(source)
         if self.boot_sector_bytes is None:
             self.boot_sector_bytes = self._read_raw(0, 512)  # 512 = boot sector size
@@ -79,7 +79,7 @@ class DriveReader:
         self.set_source(source)
         return self.boot_sector_info
 
-    def get_fat_table(self, source, info):
+    def get_fat_table(self, source, info): #get/set
         self.set_source(source)
         self._validate_boot_sector_info(info)
         if self.fat_table is None:
@@ -88,7 +88,7 @@ class DriveReader:
 
     def read_cluster(self, source, info, cluster_number):
         self.set_source(source)
-        self.validate_cluster_number(cluster_number, info)
+        self.validate_cluster_number(cluster_number, info) #first_sector la sector dau tien cua cluster
         first_sector = info.first_data_sector + ((cluster_number - 2) * info.sectors_per_cluster)
         offset = first_sector * info.bytes_per_sector
         return self._read_raw(offset, info.cluster_size_bytes)
