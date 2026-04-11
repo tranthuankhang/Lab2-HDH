@@ -24,7 +24,6 @@ class DriveReader:
 
     def __init__(self):
         self.current_source = ""
-        self.open_path = ""
         self.stream = None
         self.boot_sector_bytes = None
         self.boot_sector_info = None
@@ -41,7 +40,6 @@ class DriveReader:
                 pass
         self.stream = None
         self.current_source = ""
-        self.open_path = ""
         self.boot_sector_bytes = None
         self.boot_sector_info = None
         self.fat_table = None
@@ -65,15 +63,7 @@ class DriveReader:
             raise FAT32ReaderError(f"Loi doc USB: {e}")
 
         self.current_source = normalized
-        self.open_path = path
         return normalized
-
-    def read_bytes(self, source, offset, size):
-        self.set_source(source)
-        return self._read_raw(offset, size)
-
-    def read_sector(self, source, sector_index, bytes_per_sector=512):
-        return self.read_bytes(source, sector_index * bytes_per_sector, bytes_per_sector)
 
     def get_boot_sector_bytes(self, source):
         self.set_source(source)
