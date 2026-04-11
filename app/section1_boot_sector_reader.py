@@ -62,10 +62,10 @@ class BootSectorReader:
 
     def _parse(self, raw, source_display):
         if len(raw) < 512:  # 512 = boot sector size
-            raise FAT32ReaderError("Boot Sector khong du 512 bytes.")
+            raise FAT32ReaderError("Boot Sector is less than 512 bytes.")
 
         if raw[510:512] != b"\x55\xAA":  # 0x55AA = valid boot signature
-            raise FAT32ReaderError("Sai Boot Sector signature (khong phai 0x55AA).")
+            raise FAT32ReaderError("Invalid Boot Sector signature (expected 0x55AA).")
 
         bytes_per_sector = int.from_bytes(raw[11:13], "little")
         sectors_per_cluster = raw[13]

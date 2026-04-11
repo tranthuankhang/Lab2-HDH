@@ -3,11 +3,12 @@ from app.section1_boot_sector_reader import BootSectorReader
 
 
 class TxtFileEntry:
-    def __init__(self, file_name, directory_path, file_size, starting_cluster):
+    def __init__(self, file_name, directory_path, file_size, starting_cluster, raw_entry=None):
         self.file_name = file_name
         self.directory_path = directory_path
         self.file_size = file_size
         self.starting_cluster = starting_cluster
+        self.raw_entry = raw_entry  # 32-byte directory entry, dung de lay ngay/gio tao
 
     def get_directory_display(self):
         if self.directory_path:
@@ -52,7 +53,7 @@ class TxtFileScanner:
         while True:
             self.drive_reader.validate_cluster_number(cur_cluster, boot_info)
             if cur_cluster in visited_clusters:
-                raise FAT32ReaderError("Phat hien vong lap trong FAT chain.")
+                raise FAT32ReaderError("Cycle detected in FAT chain.")
             visited_clusters.add(cur_cluster)
 
             cluster_data = self.drive_reader.read_cluster(source, boot_info, cur_cluster)
@@ -105,15 +106,15 @@ class TxtFileScanner:
                 else:
                     dir_path = "/"
 
-                txt_files.append(TxtFileEntry(name, dir_path, size, start_cluster))
+                txt_files.append(TxtFileEntry(name, dir_path, size, start_cluster, entry))
 
             next_cluster = self._read_fat_entry(fat_table, cur_cluster)
             if next_cluster >= 0x0FFFFFF8:  # FAT32 end of chain marker
                 return
             if next_cluster == 0:
-                raise FAT32ReaderError(f"Cluster {cur_cluster} tro den cluster trong.")
+                raise FAT32ReaderError(f"Cluster {cur_cluster} points to a free cluster.")
             if next_cluster == 0x0FFFFFF7:  # FAT32 bad cluster marker
-                raise FAT32ReaderError(f"Cluster {cur_cluster} tro den bad cluster.")
+                raise FAT32ReaderError(f"Cluster {cur_cluster} points to a bad cluster.")
 
             cur_cluster = next_cluster
 
@@ -121,7 +122,7 @@ class TxtFileScanner:
         offset = cluster_num * 4  # 4 = FAT32 entry size (bytes)
         end = offset + 4  # 4 = FAT32 entry size (bytes)
         if end > len(fat_table):
-            raise FAT32ReaderError(f"Cluster {cluster_num} vuot qua bang FAT.")
+            raise FAT32ReaderError(f"Cluster {cluster_num} is beyond the FAT table.")
         raw = fat_table[offset:end]
         return int.from_bytes(raw, "little") & 0x0FFFFFFF  # FAT32 cluster number mask
 

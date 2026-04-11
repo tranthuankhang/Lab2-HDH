@@ -37,10 +37,11 @@ class TxtFileInfoReader(TxtFileScanner):
         # --- Chuan bi: lay boot sector info va FAT table ---
         boot_info, fat_table = self._prepare_fat_access(source)
 
-        # --- Lay ngay gio tao tu directory entry ---
-        date_created, time_created = self._find_creation_datetime(
-            source, boot_info, fat_table, selected_file
-        )
+        # --- Lay ngay gio tao tu directory entry da luu trong TxtFileEntry ---
+        if selected_file.raw_entry is not None:
+            date_created, time_created = self._decode_datetime(selected_file.raw_entry)
+        else:
+            date_created, time_created = "N/A", "N/A"
 
         # --- Doc noi dung file tu cluster chain ---
         raw_bytes = self._read_file_content(source, boot_info, fat_table, selected_file)
@@ -119,126 +120,8 @@ class TxtFileInfoReader(TxtFileScanner):
         return bytes(data[: selected_file.file_size])
 
     # ------------------------------------------------------------
-    #  TIM NGAY GIO TAO TU DIRECTORY ENTRY
+    #  GIAI MA NGAY GIO TAO TU DIRECTORY ENTRY
     # ------------------------------------------------------------
-
-    def _find_creation_datetime(self, source, boot_info, fat_table, selected_file):
-        """
-        Tim directory entry 32-byte cua file va giai ma ngay gio tao.
-
-        Cach hoat dong:
-            1. Bat dau tu thu muc goc (RDET).
-            2. Neu file nam trong thu muc con -> di theo duong dan
-               (vd "/folder1/folder2") tung buoc den thu muc chua file.
-            3. Trong thu muc do, tim entry co ten file va starting_cluster khop.
-            4. Giai ma 2 bytes creation_time va 2 bytes creation_date.
-        """
-        # --- Buoc 1: bat dau tu RDET ---
-        dir_cluster = boot_info.RDET_start_cluster
-
-        # --- Buoc 2: neu file trong thu muc con, di theo duong dan ---
-        path = selected_file.directory_path.strip("/")
-        if path:
-            for folder_name in path.split("/"):
-                dir_cluster = self._find_entry_in_dir(
-                    source, boot_info, fat_table, dir_cluster,
-                    match_folder=folder_name,
-                )
-                if dir_cluster is None:
-                    return "N/A", "N/A"
-
-        # --- Buoc 3: tim entry cua file trong thu muc chua no ---
-        entry = self._find_entry_in_dir(
-            source, boot_info, fat_table, dir_cluster,
-            match_file=selected_file,
-        )
-        if entry is None:
-            return "N/A", "N/A"
-
-        # --- Buoc 4: giai ma ngay gio tao ---
-        return self._decode_datetime(entry)
-
-    def _find_entry_in_dir(self, source, boot_info, fat_table, dir_cluster,
-                           match_folder=None, match_file=None):
-        """
-        Duyet tat ca entry trong mot thu muc (co the gom nhieu cluster).
-
-        Co 2 che do tim kiem:
-            - match_folder: tim thu muc con co ten = match_folder
-                            -> tra ve starting_cluster cua thu muc do.
-            - match_file:   tim file TXT co ten va starting_cluster khop
-                            -> tra ve 32-byte entry.
-
-        Tra ve None neu khong tim thay.
-        """
-        cur = dir_cluster
-        lfn_parts = []      # cac phan LFN (long file name) tam luu
-        visited = set()
-
-        while True:
-            # Tranh vong lap vo tan
-            if cur in visited:
-                return None
-            visited.add(cur)
-
-            # Doc toan bo du lieu cua cluster hien tai
-            self.drive_reader.validate_cluster_number(cur, boot_info)
-            data = self.drive_reader.read_cluster(source, boot_info, cur)
-
-            # Duyet tung entry (moi entry = 32 bytes)
-            for off in range(0, len(data), 32):
-                entry = data[off: off + 32]
-                if len(entry) < 32:
-                    return None
-
-                first_byte = entry[0]
-
-                # Entry rong (0x00) -> het directory
-                if first_byte == 0x00:
-                    return None
-
-                # Entry da xoa (0xE5) -> bo qua, reset LFN buffer
-                if first_byte == 0xE5:
-                    lfn_parts = []
-                    continue
-
-                attr = entry[11]
-
-                # Entry LFN -> luu tam, cho ghep voi entry chinh
-                if attr == 0x0F:
-                    lfn_parts.insert(0, self._get_lfn_text(entry))
-                    continue
-
-                # Lay ten: uu tien LFN, neu khong thi dung short name
-                if lfn_parts:
-                    name = "".join(lfn_parts).strip()
-                else:
-                    name = self._get_short_name(entry)
-                lfn_parts = []
-
-                if not name:
-                    continue
-
-                # ---- Che do 1: tim thu muc con ----
-                if match_folder is not None:
-                    is_dir = bool(attr & 0x10)
-                    if not is_dir or name in (".", ".."):
-                        continue
-                    if name.lower() == match_folder.lower():
-                        return self._get_start_cluster(entry)
-
-                # ---- Che do 2: tim file theo ten + starting_cluster ----
-                elif match_file is not None:
-                    start = self._get_start_cluster(entry)
-                    if (start == match_file.starting_cluster
-                            and name.lower() == match_file.file_name.lower()):
-                        return entry
-
-            # Chuyen sang cluster tiep theo cua thu muc (neu co)
-            nxt = self._read_fat_entry(fat_table, cur)
-            if nxt >= 0x0FFFFFF8 or nxt < 2:
-                return None
-            cur = nxt
 
     def _decode_datetime(self, entry):
         """

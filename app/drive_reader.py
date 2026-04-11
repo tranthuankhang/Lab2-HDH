@@ -56,11 +56,11 @@ class DriveReader:
         try:
             self.stream = open(path, "rb", buffering=0)
         except PermissionError:
-            raise FAT32ReaderError("Khong the truy cap USB. Hay chay voi quyen Admin.")
+            raise FAT32ReaderError("Cannot access USB drive. Please run as Administrator.")
         except FileNotFoundError:
-            raise FAT32ReaderError("Khong tim thay o USB nay.")
+            raise FAT32ReaderError("USB drive not found.")
         except OSError as e:
-            raise FAT32ReaderError(f"Loi doc USB: {e}")
+            raise FAT32ReaderError(f"USB read error: {e}")
 
         self.current_source = normalized
         return normalized
@@ -95,39 +95,39 @@ class DriveReader:
 
     def _read_raw(self, offset, size):
         if self.stream is None:
-            raise FAT32ReaderError("Chua mo USB nao.")
+            raise FAT32ReaderError("No USB drive is open.")
 
         self.stream.seek(offset)
         data = self.stream.read(size)
         if len(data) != size:
-            raise FAT32ReaderError(f"Doc thieu du lieu tai offset {offset}: {len(data)}/{size} bytes")
+            raise FAT32ReaderError(f"Incomplete read at offset {offset}: {len(data)}/{size} bytes")
         return data
 
     def _normalize_source(self, source):
         cleaned = source.strip().strip('"')
         if not cleaned:
-            raise FAT32ReaderError("Hay nhap ki tu o dia, vd: E:")
+            raise FAT32ReaderError("Drive letter is required, e.g.: E:")
 
         if not self.DRIVE_PATTERN.match(cleaned):
-            raise FAT32ReaderError("Sai dinh dang o dia, vd: E:")
+            raise FAT32ReaderError("Invalid drive letter format, e.g.: E:")
 
         return cleaned[0].upper() + ":"
 
     def validate_cluster_number(self, cluster_number, info):
         self._validate_boot_sector_info(info)
         if cluster_number < 2 or cluster_number > info.max_cluster_number:
-            raise FAT32ReaderError(f"Cluster {cluster_number} nam ngoai vung hop le.")
+            raise FAT32ReaderError(f"Cluster {cluster_number} is out of valid range.")
 
     def _validate_boot_sector_info(self, info):
         if info is None:
-            raise FAT32ReaderError("Chua co Boot Sector info.")
+            raise FAT32ReaderError("Boot Sector info is not available.")
         if info.bytes_per_sector <= 0:
-            raise FAT32ReaderError("bytes_per_sector phai > 0")
+            raise FAT32ReaderError("bytes_per_sector must be > 0")
         if info.sectors_per_cluster <= 0:
-            raise FAT32ReaderError("sectors_per_cluster phai > 0")
+            raise FAT32ReaderError("sectors_per_cluster must be > 0")
         if info.sectors_per_fat <= 0:
-            raise FAT32ReaderError("sectors_per_fat phai > 0")
+            raise FAT32ReaderError("sectors_per_fat must be > 0")
         if info.RDET_start_cluster < 2:
-            raise FAT32ReaderError("RDET_start_cluster phai >= 2")
+            raise FAT32ReaderError("RDET_start_cluster must be >= 2")
         if info.total_clusters <= 0:
-            raise FAT32ReaderError("Vung du lieu khong co cluster nao.")
+            raise FAT32ReaderError("Data region contains no clusters.")
