@@ -4,7 +4,7 @@
 
 Chương trình hiện có các chức năng chính:
 
-- Section 1: đọc Boot Sector của FAT32 và hiển thị các thông tin cần thiết trên giao diện.
+- Section 1: đọc Boot Sector của FAT32, hiển thị các trường đang có trên giao diện như bytes/sector, sectors/cluster, Boot Sector region, số FAT, sectors/FAT, tổng số sector và lấy root directory start cluster để các section sau duyệt thư mục.
 - Section 2: quét đệ quy tất cả file `*.txt` trên USB FAT32, bao gồm cả file trong thư mục con.
 - Section 3: đọc thông tin chi tiết của file TXT được chọn: tên file, ngày/giờ tạo, kích thước và nội dung process theo format Lab1.
 - Section 4: chạy mô phỏng lập lịch Multi-Level Queue, Round Robin giữa các queue; mỗi queue dùng `SJF` hoặc `SRTN`, sau đó hiển thị Gantt chart, turnaround time và waiting time.
@@ -38,7 +38,7 @@ Lab2/
 - `app/section2_txt_scanner.py`: duyệt FAT/directory entry để tìm file `*.txt`.
 - `app/section3_txt_info_reader.py`: đọc metadata và nội dung TXT, parse queue/process.
 - `app/section4_scheduler_runner.py`: mô phỏng Multi-Level Queue Scheduler và tính kết quả.
-- `requirements.txt`: danh sách thư viện cần cài, hiện tại gồm `PySide6`.
+- `requirements.txt`: danh sách thư viện cần cài. Chương trình chỉ cần cài trực tiếp `PySide6`; các dependency con của PySide6 sẽ được `pip` tự cài theo.
 
 ## Cài đặt và chạy
 
@@ -68,6 +68,15 @@ python main.py
 6. Bấm `Run Scheduling` để xem CPU Scheduling Diagram và bảng thống kê.
 
 Lưu ý: trên Windows, việc đọc trực tiếp `\\.\E:` có thể cần chạy terminal/IDE bằng quyền Administrator.
+
+## Đóng gói nộp bài
+
+Theo yêu cầu lab, nộp 2 file riêng, không zip chung báo cáo với source code:
+
+- `MSSV1_MSSV2.zip`: chỉ chứa source code chương trình, gồm `app/`, `main.py`, `requirements.txt` và `README.md`.
+- `MSSV1_MSSV2.pdf`: file báo cáo PDF riêng.
+
+Không cần đưa vào file zip source các thư mục/file local như `.git/`, `__pycache__/`, `BaoCao/`, `*.log` hoặc các file build trung gian của LaTeX.
 
 ## Format file TXT đầu vào
 
