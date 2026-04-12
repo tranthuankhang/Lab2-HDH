@@ -1,14 +1,13 @@
 # Lab 02 - FAT32 Explorer
 
-Khung sườn Python + PySide6 cho đồ án Hệ điều hành.
+Ứng dụng Python + PySide6 hỗ trợ đọc USB/phân vùng FAT32 cho bài lab Hệ điều hành.
 
-Hiện tại đã làm xong:
+Chương trình hiện có các chức năng chính:
 
-- Chức năng 1: đọc `Boot Sector` và hiển thị ra giao diện dưới dạng bảng
-- Chức năng 2: liệt kê tất cả file `*.txt` trên USB FAT32, kể cả trong thư mục con
-- Đã tách mã nguồn theo 4 phần của đề bài: Boot Sector, TXT scan, TXT info, scheduling
-- Đã tách phần đọc ổ đĩa dùng chung ra file riêng để tránh lặp việc mở/đọc USB giữa section 1 và 2
-- Khung sườn cho các chức năng còn lại: chi tiết file, mô phỏng scheduling
+- Section 1: đọc Boot Sector của FAT32 và hiển thị các thông tin cần thiết trên giao diện.
+- Section 2: quét đệ quy tất cả file `*.txt` trên USB FAT32, bao gồm cả file trong thư mục con.
+- Section 3: đọc thông tin chi tiết của file TXT được chọn: tên file, ngày/giờ tạo, kích thước và nội dung process theo format Lab1.
+- Section 4: chạy mô phỏng lập lịch Multi-Level Queue, Round Robin giữa các queue; mỗi queue dùng `SJF` hoặc `SRTN`, sau đó hiển thị Gantt chart, turnaround time và waiting time.
 
 ## Cấu trúc thư mục
 
@@ -24,18 +23,24 @@ Lab2/
 |   `-- ui_main.py
 |-- main.py
 |-- requirements.txt
+|-- .gitignore
 `-- README.md
 ```
 
-Ghi chú:
+`BaoCao/` là thư mục báo cáo LaTeX/PDF cá nhân và đã được đưa vào `.gitignore`, nên sẽ không được commit lên git.
 
-- `drive_reader.py`: phần đọc ổ đĩa dùng chung, giữ kết nối tới USB và cache dữ liệu đã đọc để section 1 và 2 dùng lại
-- `section1_boot_sector_reader.py`: phần 1 của đề, đọc và phân tích Boot Sector
-- `section2_txt_scanner.py`: phần 2 của đề, dò tất cả file `*.txt`
-- `section3_txt_info_reader.py`: khung sườn phần 3, chưa triển khai logic
-- `section4_scheduler_runner.py`: khung sườn phần 4, chưa triển khai logic
+## Vai trò các file
 
-## Cách chạy chính (không cần venv)
+- `main.py`: điểm chạy chính của ứng dụng.
+- `app/ui_main.py`: giao diện PySide6 gồm tab Boot Sector và Text Files.
+- `app/drive_reader.py`: mở, đọc và cache dữ liệu từ USB/phân vùng FAT32.
+- `app/section1_boot_sector_reader.py`: đọc và parse Boot Sector.
+- `app/section2_txt_scanner.py`: duyệt FAT/directory entry để tìm file `*.txt`.
+- `app/section3_txt_info_reader.py`: đọc metadata và nội dung TXT, parse queue/process.
+- `app/section4_scheduler_runner.py`: mô phỏng Multi-Level Queue Scheduler và tính kết quả.
+- `requirements.txt`: danh sách thư viện cần cài, hiện tại gồm `PySide6`.
+
+## Cài đặt và chạy
 
 Nếu máy đã có Python, có thể cài thư viện và chạy trực tiếp:
 
@@ -44,28 +49,59 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-## Cách chạy tùy chọn (dùng venv)
-
-Nếu muốn tách môi trường cài đặt riêng cho bài lab, có thể dùng `venv`:
+Nếu muốn tách môi trường cài đặt riêng:
 
 ```powershell
 python -m venv .venv
-.venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python main.py
 ```
 
-## Cách dùng chức năng Boot Sector
+## Cách dùng
 
-- Nhập ký tự ổ đĩa FAT32, ví dụ: `E:`
-- Bấm `Read`
+1. Cắm USB/phân vùng FAT32 vào máy.
+2. Mở chương trình bằng `python main.py`.
+3. Ở tab `Boot Sector`, nhập ký tự ổ đĩa, ví dụ `E:`, rồi bấm `Read`.
+4. Sau khi đọc Boot Sector thành công, tab `Text Files` sẽ tự động quét các file `.txt`.
+5. Chọn một file TXT để xem metadata và bảng process.
+6. Bấm `Run Scheduling` để xem CPU Scheduling Diagram và bảng thống kê.
 
-Lưu ý:
+Lưu ý: trên Windows, việc đọc trực tiếp `\\.\E:` có thể cần chạy terminal/IDE bằng quyền Administrator.
 
-- Khi đọc trực tiếp USB/ổ đĩa trên Windows, chương trình có thể cần quyền `Run as Administrator`
-- `RDET sectors` trên FAT32 thường bằng `0`, đây là đặc điểm bình thường của FAT32
+## Format file TXT đầu vào
 
-## Hướng mở rộng tiếp theo
+Nội dung file TXT được parse theo format Lab1:
 
-- Parse nội dung file txt thành danh sách process
-- Nối `section4_scheduler_runner.py` với giao diện để vẽ Gantt chart và tính waiting/turnaround time
+```text
+<so_luong_queue>
+Q<id> <time_slice> <algorithm>
+...
+P<id> <arrival_time> <cpu_burst_time> Q<queue_id>
+...
+```
+
+Ví dụ:
+
+```text
+3
+Q1 8 SRTN
+Q2 5 SJF
+Q3 3 SJF
+P1 0 12 Q1
+P2 1 6 Q1
+P3 2 8 Q2
+```
+
+`algorithm` hiện hỗ trợ:
+
+- `SJF`
+- `SRTN`
+
+## Kiểm tra nhanh
+
+Có thể kiểm tra lỗi cú pháp bằng lệnh:
+
+```powershell
+python -m compileall main.py app
+```
