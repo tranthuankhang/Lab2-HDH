@@ -127,23 +127,23 @@ class TxtFileInfoReader(TxtFileScanner):
         """
         Giai ma ngay/gio tao tu 32-byte directory entry.
 
-        Cau truc 2 byte creation time (offset 14-15, little-endian):
-            Bits 15-11: Gio (0-23)
-            Bits 10-5:  Phut (0-59)
-            Bits 4-0:   Giay/2 (0-29 -> 0-58 giay)
+        Cau truc 3 byte creation time (offset 13-15, little-endian):
+            Bits 23-19: Gio (0-23)
+            Bits 18-13: Phut (0-59)
+            Bits 12-7:  Giay (0-59)
 
         Cau truc 2 byte creation date (offset 16-17, little-endian):
             Bits 15-9: Nam - 1980 (0-127 -> 1980-2107)
             Bits 8-5:  Thang (1-12)
             Bits 4-0:  Ngay (1-31)
         """
-        raw_time = int.from_bytes(entry[14:16], "little")
+        raw_time = int.from_bytes(entry[13:16], "little")
         raw_date = int.from_bytes(entry[16:18], "little")
 
         # Tach tung truong bang phep dich bit va mask
-        hour = (raw_time >> 11) & 0x1F
-        minute = (raw_time >> 5) & 0x3F
-        second = (raw_time & 0x1F) * 2
+        hour = (raw_time >> 19) & 0x1F
+        minute = (raw_time >> 13) & 0x3F
+        second = (raw_time >> 7) & 0x3F
 
         year = ((raw_date >> 9) & 0x7F) + 1980
         month = (raw_date >> 5) & 0x0F
