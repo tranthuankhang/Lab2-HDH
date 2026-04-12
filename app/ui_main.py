@@ -168,10 +168,9 @@ def create_scroll_page(content):
 
 
 class BootSectorTab(QWidget):
-    def __init__(self, status_callback, txt_scan_callback=None, drive_reader=None):
+    def __init__(self, text_files_tab, drive_reader=None):
         super().__init__()
-        self.status_callback = status_callback
-        self.txt_scan_callback = txt_scan_callback
+        self.text_files_tab = text_files_tab
         self.reader = BootSectorReader(drive_reader)
 
         # ô nhập ổ đĩa
@@ -232,15 +231,11 @@ class BootSectorTab(QWidget):
         try:
             info = self.reader.read_boot_sector(source)
         except FAT32ReaderError as exc:
-            self.status_callback("Boot Sector read failed.")
             QMessageBox.critical(self, "Unable to Read Boot Sector", str(exc))
             return
 
         self.show_boot_sector(info)
-        self.status_callback(f"Boot Sector loaded from {info.source_display}.")
-
-        if self.txt_scan_callback is not None:
-            self.txt_scan_callback(info.source_display)
+        self.text_files_tab.load_txt_files_for_source(info.source_display)
 
     def show_boot_sector(self, info):
         rows = info.table_rows()
@@ -635,8 +630,7 @@ class MainWindow(QMainWindow):
         self.drive_reader = DriveReader()
         self.text_files_tab = TextFilesTab(self.show_status_message, self.drive_reader)
         self.boot_sector_tab = BootSectorTab(
-            self.show_status_message,
-            self.text_files_tab.load_txt_files_for_source,
+            self.text_files_tab,
             self.drive_reader,
         )
 
